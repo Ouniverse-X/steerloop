@@ -1,13 +1,20 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CodexAppServerClient } from "../src/codex-app-server.js";
-import { summarizeRequestedPermissions } from "../src/codex-adapter.js";
+import { limitCodexString, summarizeRequestedPermissions } from "../src/codex-adapter.js";
 
 const fixture = fileURLToPath(
   new URL("./fixtures/fake-codex-app-server.mjs", import.meta.url),
 );
 
 describe("Codex App Server client", () => {
+  it("bounds Codex strings before protocol validation", () => {
+    const bounded = limitCodexString("x".repeat(600), 512);
+
+    expect(bounded).toHaveLength(512);
+    expect(bounded.endsWith("...")).toBe(true);
+  });
+
   it("renders current filesystem and network permission requests", () => {
     expect(
       summarizeRequestedPermissions({

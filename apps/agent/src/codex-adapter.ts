@@ -33,6 +33,21 @@ interface ThreadSummary {
   status?: { type?: string; activeFlags?: string[] };
 }
 
+const FIELD_LIMITS = {
+  sessionTitle: 512,
+  cwd: 4_096,
+  approvalTitle: 512,
+  approvalReason: 4_096,
+  command: 16_384,
+  networkHost: 512,
+  networkProtocol: 32,
+  statusDetail: 2_048,
+  activitySummary: 2_048,
+  activityDetail: 16_384,
+  messageDelta: 16_384,
+  diffSummary: 4_096,
+} as const;
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
@@ -41,6 +56,17 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+export function limitCodexString(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  if (maxLength <= 3) return value.slice(0, maxLength);
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function optionalLimitedString(value: unknown, maxLength: number): string | undefined {
+  const text = optionalString(value);
+  return text === undefined ? undefined : limitCodexString(text, maxLength);
 }
 
 function mapThreadStatus(status: unknown): SessionStatus {
@@ -174,11 +200,16 @@ export class CodexAdapter implements AgentAdapter {
   }
 
   private emitThread(thread: ThreadSummary): void {
+    const title = optionalLimitedString(thread.name, FIELD_LIMITS.sessionTitle)
+      ?? optionalLimitedString(thread.preview, FIELD_LIMITS.sessionTitle)
+      ?? limitCodexString(thread.id, FIELD_LIMITS.sessionTitle);
+    const cwd = optionalLimitedString(thread.cwd, FIELD_LIMITS.cwd);
+
     this.emit(thread.id, {
       type: "session.upserted",
       payload: {
-        title: thread.name ?? thread.preview ?? thread.id,
-        ...(optionalString(thread.cwd) === undefined ? {} : { cwd: thread.cwd }),
+        title,
+        ...(cwd === undefined ? {} : { cwd }),
         source: "codex",
         status: mapThreadStatus(thread.status),
       },
@@ -289,29 +320,25 @@ export class CodexAdapter implements AgentAdapter {
         ? "file_change"
         : "permissions";
     const networkContext = asRecord(params.networkApprovalContext);
-    const kind = optionalString(networkContext.host) === undefined ? requestKind : "network";
+    const networkHost = optionalLimitedString(networkContext.host, FIELD_LIMITS.networkHost);
+    const networkProtocol = optionalLimitedString(networkContext.protocol, FIELD_LIMITS.networkProtocol);
+    const kind = networkHost === undefined ? requestKind : "network";
     const rawPermissions = asRecord(params.permissions);
     const requestedPermissions = summarizeRequestedPermissions(rawPermissions);
     const approvalId = `${sessionId}:${itemId}:${String(params.approvalId ?? message.id)}`;
+    const command = optionalLimitedString(params.command, FIELD_LIMITS.command);
+    const cwd = optionalLimitedString(params.cwd, FIELD_LIMITS.cwd);
+    const reason = optionalLimitedString(params.reason, FIELD_LIMITS.approvalReason);
+    const grantRoot = optionalLimitedString(params.grantRoot, FIELD_LIMITS.cwd);
     const material = canonicalizeApproval({
       approvalId,
       kind,
-      ...(optionalString(params.command) === undefined
-        ? {}
-        : { command: params.command as string }),
-      ...(optionalString(params.cwd) === undefined ? {} : { cwd: params.cwd as string }),
-      ...(optionalString(params.reason) === undefined
-        ? {}
-        : { reason: params.reason as string }),
-      ...(optionalString(params.grantRoot) === undefined
-        ? {}
-        : { grantRoot: params.grantRoot as string }),
-      ...(optionalString(networkContext.host) === undefined
-        ? {}
-        : { networkHost: networkContext.host as string }),
-      ...(optionalString(networkContext.protocol) === undefined
-        ? {}
-        : { networkProtocol: networkContext.protocol as string }),
+      ...(command === undefined ? {} : { command }),
+      ...(cwd === undefined ? {} : { cwd }),
+      ...(reason === undefined ? {} : { reason }),
+      ...(grantRoot === undefined ? {} : { grantRoot }),
+      ...(networkHost === undefined ? {} : { networkHost }),
+      ...(networkProtocol === undefined ? {} : { networkProtocol }),
       ...(requestedPermissions.length === 0 ? {} : { requestedPermissions }),
     });
     const digest = createHash("sha256").update(material).digest("hex");
@@ -335,30 +362,18 @@ export class CodexAdapter implements AgentAdapter {
         kind,
         title:
           kind === "network"
-            ? `Allow network access to ${String(networkContext.host)}`
+            ? limitCodexString(`Allow network access to ${networkHost}`, FIELD_LIMITS.approvalTitle)
             : requestKind === "command"
               ? "Allow command execution"
               : requestKind === "file_change"
                 ? "Allow file changes"
                 : "Grant additional permissions",
-        ...(optionalString(params.reason) === undefined
-          ? {}
-          : { reason: params.reason as string }),
-        ...(optionalString(params.command) === undefined
-          ? {}
-          : { command: params.command as string }),
-        ...(optionalString(params.cwd) === undefined
-          ? {}
-          : { cwd: params.cwd as string }),
-        ...(optionalString(params.grantRoot) === undefined
-          ? {}
-          : { grantRoot: params.grantRoot as string }),
-        ...(optionalString(networkContext.host) === undefined
-          ? {}
-          : { networkHost: networkContext.host as string }),
-        ...(optionalString(networkContext.protocol) === undefined
-          ? {}
-          : { networkProtocol: networkContext.protocol as string }),
+        ...(reason === undefined ? {} : { reason }),
+        ...(command === undefined ? {} : { command }),
+        ...(cwd === undefined ? {} : { cwd }),
+        ...(grantRoot === undefined ? {} : { grantRoot }),
+        ...(networkHost === undefined ? {} : { networkHost }),
+        ...(networkProtocol === undefined ? {} : { networkProtocol }),
         ...(requestedPermissions.length === 0 ? {} : { requestedPermissions }),
         requestDigest: digest,
         expiresAt: new Date(expiresAt).toISOString(),
@@ -403,6 +418,10 @@ export class CodexAdapter implements AgentAdapter {
         if (sessionId === undefined) break;
         this.activeTurns.delete(sessionId);
         const status = turn.status;
+        const errorDetail = optionalLimitedString(
+          asRecord(turn.error).message,
+          FIELD_LIMITS.statusDetail,
+        );
         this.emit(sessionId, {
           type: "session.status.changed",
           payload: {
@@ -412,9 +431,7 @@ export class CodexAdapter implements AgentAdapter {
                 : status === "interrupted"
                   ? "interrupted"
                   : "failed",
-            ...(optionalString(asRecord(turn.error).message) === undefined
-              ? {}
-              : { detail: asRecord(turn.error).message as string }),
+            ...(errorDetail === undefined ? {} : { detail: errorDetail }),
           },
         });
         const queue = this.queuedPrompts.get(sessionId) ?? [];
@@ -431,7 +448,7 @@ export class CodexAdapter implements AgentAdapter {
             type: "session.message.delta",
             payload: {
               messageId: String(params.itemId ?? randomUUID()),
-              delta: params.delta,
+              delta: limitCodexString(params.delta, FIELD_LIMITS.messageDelta),
             },
           });
         }
@@ -446,7 +463,10 @@ export class CodexAdapter implements AgentAdapter {
           this.emit(sessionId, {
             type: "session.diff.updated",
             payload: {
-              summary: `${files.size} changed file${files.size === 1 ? "" : "s"}`,
+              summary: limitCodexString(
+                `${files.size} changed file${files.size === 1 ? "" : "s"}`,
+                FIELD_LIMITS.diffSummary,
+              ),
               filesChanged: files.size,
               additions,
               deletions,
@@ -461,15 +481,16 @@ export class CodexAdapter implements AgentAdapter {
           const command = Array.isArray(item.command)
             ? item.command.join(" ")
             : String(item.command ?? "command");
+          const cwd = optionalLimitedString(item.cwd, FIELD_LIMITS.cwd);
           this.emit(sessionId, {
             type: "session.activity",
             payload: {
               activityId: String(item.id ?? randomUUID()),
               kind: "command",
-              summary: command,
-              ...(optionalString(item.cwd) === undefined
+              summary: limitCodexString(command, FIELD_LIMITS.activitySummary),
+              ...(cwd === undefined
                 ? {}
-                : { detail: `Working directory: ${String(item.cwd)}` }),
+                : { detail: limitCodexString(`Working directory: ${cwd}`, FIELD_LIMITS.activityDetail) }),
             },
           });
         } else if (item.type === "fileChange") {
@@ -491,7 +512,7 @@ export class CodexAdapter implements AgentAdapter {
             type: "session.status.changed",
             payload: {
               status: "failed",
-              detail: optionalString(error.message) ?? "Codex turn failed",
+              detail: optionalLimitedString(error.message, FIELD_LIMITS.statusDetail) ?? "Codex turn failed",
             },
           });
         }
