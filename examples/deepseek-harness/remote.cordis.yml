@@ -1,0 +1,14 @@
+# Remote HTTPS/WSS Steerloop overlay for DeepSeek Harness profiles.
+# Set STEERLOOP_RELAY_URL and STEERLOOP_TOKEN before running dsh.
+
+- insert:
+    - id: steerloop
+      name: '@steerloop/dsh-plugin'
+      config:
+        relayUrl: !!js "process.env.STEERLOOP_RELAY_URL"
+        token: !!js "process.env.STEERLOOP_TOKEN"
+        hostId: !!js "process.env.STEERLOOP_HOST_ID"
+        hostName: !!js "process.env.STEERLOOP_HOST_NAME"
+        pairingCode: !!js "process.env.STEERLOOP_PAIRING_CODE"
+        requireRelayUrl: true
+        requireToken: true

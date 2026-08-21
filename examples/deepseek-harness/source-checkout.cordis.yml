@@ -1,0 +1,12 @@
+# Source-checkout overlay for this development workspace. Use the package-name
+# overlays after installing @steerloop/dsh-plugin into a Harness profile.
+
+- insert:
+    - id: steerloop
+      name: /home/beihang/projects/Brainwaves/steerloop/packages/dsh-plugin/src/index.js
+      config:
+        relayUrl: !!js "process.env.STEERLOOP_RELAY_URL ?? 'ws://127.0.0.1:8787/ws'"
+        token: !!js "process.env.STEERLOOP_TOKEN ?? 'steerloop-local-dev'"
+        hostId: !!js "process.env.STEERLOOP_HOST_ID"
+        hostName: !!js "process.env.STEERLOOP_HOST_NAME"
+        pairingCode: !!js "process.env.STEERLOOP_PAIRING_CODE"

@@ -88,4 +88,30 @@ describe("DeepSeek Harness mapping", () => {
     }));
     vi.useRealTimers();
   });
+
+  it("fails remote-required config before falling back to local defaults", () => {
+    const previousToken = process.env.STEERLOOP_TOKEN;
+    const previousRelayUrl = process.env.STEERLOOP_RELAY_URL;
+    delete process.env.STEERLOOP_TOKEN;
+    delete process.env.STEERLOOP_RELAY_URL;
+    try {
+      expect(() => new SteerloopDshBridge({ requireToken: true })).toThrow(
+        /STEERLOOP_TOKEN/,
+      );
+      expect(() => new SteerloopDshBridge({ requireRelayUrl: true })).toThrow(
+        /STEERLOOP_RELAY_URL/,
+      );
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.STEERLOOP_TOKEN;
+      } else {
+        process.env.STEERLOOP_TOKEN = previousToken;
+      }
+      if (previousRelayUrl === undefined) {
+        delete process.env.STEERLOOP_RELAY_URL;
+      } else {
+        process.env.STEERLOOP_RELAY_URL = previousRelayUrl;
+      }
+    }
+  });
 });

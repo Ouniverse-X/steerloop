@@ -16,14 +16,20 @@ const DEFAULTS = {
 export class SteerloopDshBridge {
   constructor(config = {}) {
     const host = hostname();
+    if (config.requireToken === true && config.token === undefined && process.env.STEERLOOP_TOKEN === undefined) {
+      throw new Error("STEERLOOP_TOKEN or config.token is required");
+    }
+    if (config.requireRelayUrl === true && config.relayUrl === undefined && process.env.STEERLOOP_RELAY_URL === undefined) {
+      throw new Error("STEERLOOP_RELAY_URL or config.relayUrl is required");
+    }
     const token = config.token ?? process.env.STEERLOOP_TOKEN ?? DEFAULTS.token;
     this.config = {
       ...DEFAULTS,
       ...config,
       relayUrl: config.relayUrl ?? process.env.STEERLOOP_RELAY_URL ?? DEFAULTS.relayUrl,
       token,
-      hostId: config.hostId ?? `${host}-dsh`,
-      hostName: config.hostName ?? `${host} DeepSeek Harness`,
+      hostId: config.hostId ?? process.env.STEERLOOP_HOST_ID ?? `${host}-dsh`,
+      hostName: config.hostName ?? process.env.STEERLOOP_HOST_NAME ?? `${host} DeepSeek Harness`,
       pairingCode: config.pairingCode ?? process.env.STEERLOOP_PAIRING_CODE ?? randomPairingCode(),
     };
     this.mapper = new HarnessEventMapper();

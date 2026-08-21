@@ -103,6 +103,8 @@ apps/
 packages/
   dsh-plugin/  DeepSeek Harness Cordis plugin bridge
   protocol/    Shared events, commands, validation, and reducers
+examples/
+  deepseek-harness/  Harness patch overlays for local, remote, and observe-only use
 docs/          Product, architecture, decisions, and roadmap
 ```
 

@@ -23,24 +23,24 @@ Add the plugin to a Harness `cordis.yml` composition after the session and
 approval plugins:
 
 ```yaml
-plugins:
-  - id: steerloop
-    package: "@steerloop/dsh-plugin"
-    config:
-      relayUrl: "wss://steerloop.example/ws"
-      token: "${STEERLOOP_TOKEN}"
-      hostId: "gpu26-dsh"
-      hostName: "gpu26 DeepSeek Harness"
-      pairingCode: "PAIR-2026"
+- insert:
+    - id: steerloop
+      name: '@steerloop/dsh-plugin'
+      config:
+        relayUrl: "wss://steerloop.example/ws"
+        token: "replace-with-a-high-entropy-token"
+        hostId: "gpu26-dsh"
+        hostName: "gpu26 DeepSeek Harness"
+        pairingCode: "PAIR-2026"
 ```
 
 For local development with the default Steerloop stack:
 
 ```yaml
-plugins:
-  - id: steerloop
-    package: "@steerloop/dsh-plugin"
-    config: {}
+- insert:
+    - id: steerloop
+      name: '@steerloop/dsh-plugin'
+      config: {}
 ```
 
 By default the plugin uses `ws://127.0.0.1:8787/ws` and
@@ -52,12 +52,14 @@ By default the plugin uses `ws://127.0.0.1:8787/ws` and
 | --- | --- | --- |
 | `relayUrl` | `ws://127.0.0.1:8787/ws` | Steerloop Relay WebSocket endpoint. |
 | `token` | `STEERLOOP_TOKEN` or `steerloop-local-dev` | Relay shared host token. Use a high-entropy secret remotely. |
-| `hostId` | OS hostname plus `-dsh` | Stable host identity shown in Steerloop. |
-| `hostName` | OS hostname plus ` DeepSeek Harness` | Display name. |
+| `hostId` | `STEERLOOP_HOST_ID` or OS hostname plus `-dsh` | Stable host identity shown in Steerloop. |
+| `hostName` | `STEERLOOP_HOST_NAME` or OS hostname plus ` DeepSeek Harness` | Display name. |
 | `pairingCode` | random short code | Browser/mobile pairing code. |
 | `pairingTtlMs` | `600000` | Pairing code lifetime. |
 | `approvalTimeoutMs` | `300000` | How long a Harness approval waits for a remote decision. |
 | `heartbeatMs` | `15000` | Relay heartbeat interval. |
+| `requireRelayUrl` | disabled | Throw at startup when neither config nor `STEERLOOP_RELAY_URL` supplies a Relay URL. |
+| `requireToken` | disabled | Throw at startup when neither config nor `STEERLOOP_TOKEN` supplies a Relay token. |
 
 ## Current limitations
 
