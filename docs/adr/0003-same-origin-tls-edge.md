@@ -25,5 +25,5 @@ filesystems where practical, and the edge emits restrictive security headers.
 - Certificates are issued and renewed automatically for a valid DNS name.
 - Cross-origin Relay configurations are blocked by the production CSP.
 - Caddy state and the Relay journal require persistent volumes and backups.
-- Shared bearer authentication remains an alpha limitation pending per-device
-  identity and signed decisions.
+- Host authentication still uses a shared bearer token in the alpha; browser
+  pairing now provides per-device identity and signed approval decisions.

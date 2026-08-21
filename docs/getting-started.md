@@ -28,7 +28,9 @@ unsafe outside localhost.
 The Agent also prints a short pairing code such as `ABCD-1234`. In the web
 console, open **Connection**, enter the code, and choose **Pair device**. Relay
 exchanges the code for a browser-local client token, so the shared Relay token
-does not need to be copied into every browser.
+does not need to be copied into every browser. The browser also creates a local
+P-256 device key; paired approval decisions are signed with that key and bound
+to the paired device ID.
 
 ## Connect local Codex
 
@@ -60,7 +62,8 @@ the automatically derived `ws://<computer-lan-address>:5173/ws` URL, and enter
 the pairing code printed by the host Agent. Vite proxies `/ws` and `/pair` to the
 local Relay during development, so the browser does not need direct access to
 port 8787. After pairing, use **Refresh** in the Devices section to list paired
-browsers, and **Revoke** to invalidate a browser token.
+browsers, and **Revoke** to invalidate a browser token and its approval-signing
+public key.
 
 Plain HTTP and WebSocket traffic is not safe on an untrusted network. Some
 mobile browsers also restrict installable PWA and Web Crypto capabilities on
@@ -81,6 +84,9 @@ do not commit it. Relay stores browser device records in
 `steerloop-data/relay-devices.json`; set it to `off` only for disposable tests.
 The PWA keeps its configured Relay URL and paired browser token in that
 browser's local storage during the alpha.
+Clearing browser storage removes the paired token and private device key, so
+that browser must be paired again before it can approve requests as the same
+device.
 
 For remote HTTPS/WSS deployment, persistent event storage, and secret-file token
 configuration, continue with the [deployment guide](../deploy/README.md).

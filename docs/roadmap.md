@@ -34,7 +34,7 @@ web console without exposing App Server on the network.
 - [x] Persistent browser device registry
 - [x] Device listing and revocation
 - [ ] QR pairing
-- [ ] Device-bound approval signatures
+- [x] Device-bound approval signatures
 - [x] TLS deployment guide
 - [ ] PWA install and push notifications
 - [ ] Host service installation for Linux and macOS

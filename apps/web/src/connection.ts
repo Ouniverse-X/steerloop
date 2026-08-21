@@ -1,5 +1,6 @@
 import {
   PROTOCOL_VERSION,
+  canonicalizeApprovalDecision,
   commandEnvelopeSchema,
   createEmptyState,
   reduceEvent,
@@ -54,6 +55,55 @@ export interface DeviceView {
 
 const RECONNECT_MIN_MS = 750;
 const RECONNECT_MAX_MS = 10_000;
+const DEVICE_PRIVATE_KEY_STORAGE_KEY = "steerloop.devicePrivateKey";
+
+function bytesToBase64Url(bytes: ArrayBuffer): string {
+  const binary = String.fromCharCode(...new Uint8Array(bytes));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function ensureDeviceKeyPair(): Promise<{ privateKey: CryptoKey; publicKeyJwk: JsonWebKey }> {
+  const stored = localStorage.getItem(DEVICE_PRIVATE_KEY_STORAGE_KEY);
+  if (stored !== null) {
+    try {
+      const privateJwk = JSON.parse(stored) as JsonWebKey;
+      if (
+        privateJwk.kty !== "EC" ||
+        privateJwk.crv !== "P-256" ||
+        typeof privateJwk.x !== "string" ||
+        typeof privateJwk.y !== "string"
+      ) {
+        throw new Error("Stored device key is invalid");
+      }
+      const privateKey = await crypto.subtle.importKey(
+        "jwk",
+        privateJwk,
+        { name: "ECDSA", namedCurve: "P-256" },
+        true,
+        ["sign"],
+      );
+      const publicKeyJwk = {
+        kty: privateJwk.kty,
+        crv: privateJwk.crv,
+        x: privateJwk.x,
+        y: privateJwk.y,
+      };
+      return { privateKey, publicKeyJwk };
+    } catch {
+      localStorage.removeItem(DEVICE_PRIVATE_KEY_STORAGE_KEY);
+    }
+  }
+
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  const publicKeyJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  localStorage.setItem(DEVICE_PRIVATE_KEY_STORAGE_KEY, JSON.stringify(privateJwk));
+  return { privateKey: pair.privateKey, publicKeyJwk };
+}
 
 function commandId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
@@ -111,16 +161,62 @@ export async function pairWithRelay(
   code: string,
   deviceName: string,
 ): Promise<PairingResponse> {
+  const keyPair = await ensureDeviceKeyPair();
   const response = await fetch(pairingUrl(relayUrl), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code, deviceName }),
+    body: JSON.stringify({
+      code,
+      deviceName,
+      devicePublicKey: keyPair.publicKeyJwk,
+    }),
   });
   const body = await response.json() as PairingResponse;
   if (!response.ok || !body.ok || body.token === undefined) {
     throw new Error(body.error ?? "Pairing failed");
   }
   return body;
+}
+
+export async function signApprovalCommand(
+  command: CommandEnvelope,
+  deviceId: string,
+): Promise<CommandEnvelope> {
+  if (command.command.type !== "approval.resolve") return command;
+  const signedAt = new Date().toISOString();
+  const { privateKey } = await ensureDeviceKeyPair();
+  const material = canonicalizeApprovalDecision({
+    commandId: command.commandId,
+    hostId: command.hostId,
+    sessionId: command.sessionId,
+    approvalId: command.command.payload.approvalId,
+    requestDigest: command.command.payload.requestDigest,
+    decision: command.command.payload.decision,
+    deviceId,
+    issuedAt: command.issuedAt,
+    expiresAt: command.expiresAt,
+    signedAt,
+  });
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    privateKey,
+    new TextEncoder().encode(material),
+  );
+  return commandEnvelopeSchema.parse({
+    ...command,
+    command: {
+      ...command.command,
+      payload: {
+        ...command.command.payload,
+        authorization: {
+          deviceId,
+          algorithm: "ECDSA-P256-SHA256",
+          signedAt,
+          signature: bytesToBase64Url(signature),
+        },
+      },
+    },
+  });
 }
 
 export async function listDevices(relayUrl: string, token: string): Promise<DeviceView[]> {

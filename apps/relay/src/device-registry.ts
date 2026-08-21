@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual, webcrypto } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
@@ -13,6 +13,7 @@ export interface DeviceView {
 
 interface DeviceRecord extends DeviceView {
   tokenHash: string;
+  publicKeyJwk: Record<string, unknown>;
 }
 
 interface DeviceFile {
@@ -53,6 +54,7 @@ function parseDeviceFile(value: unknown): DeviceFile {
       typeof device.name !== "string" ||
       typeof device.hostId !== "string" ||
       typeof device.tokenHash !== "string" ||
+      !isP256PublicKey(device.publicKeyJwk) ||
       typeof device.createdAt !== "string" ||
       typeof device.lastSeenAt !== "string" ||
       (device.revokedAt !== undefined && typeof device.revokedAt !== "string")
@@ -62,6 +64,26 @@ function parseDeviceFile(value: unknown): DeviceFile {
     return device as unknown as DeviceRecord;
   });
   return { version: 1, devices };
+}
+
+function base64UrlToBytes(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(
+    Math.ceil(value.length / 4) * 4,
+    "=",
+  );
+  return Buffer.from(padded, "base64");
+}
+
+export function isP256PublicKey(value: unknown): value is Record<string, unknown> {
+  const key = typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : {};
+  return (
+    key.kty === "EC" &&
+    key.crv === "P-256" &&
+    typeof key.x === "string" &&
+    typeof key.y === "string"
+  );
 }
 
 export class DeviceRegistry {
@@ -89,11 +111,19 @@ export class DeviceRegistry {
 
   list(): DeviceView[] {
     return [...this.devices.values()]
-      .map(({ tokenHash: _tokenHash, ...device }) => device)
+      .map(({ tokenHash: _tokenHash, publicKeyJwk: _publicKeyJwk, ...device }) => device)
       .sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt));
   }
 
-  async issue(hostId: string, name: string, now = new Date()): Promise<{ token: string; device: DeviceView }> {
+  async issue(
+    hostId: string,
+    name: string,
+    publicKeyJwk: Record<string, unknown>,
+    now = new Date(),
+  ): Promise<{ token: string; device: DeviceView }> {
+    if (!isP256PublicKey(publicKeyJwk)) {
+      throw new Error("Invalid device public key");
+    }
     const token = `slc_${randomBytes(32).toString("hex")}`;
     const timestamp = now.toISOString();
     const device: DeviceRecord = {
@@ -101,12 +131,13 @@ export class DeviceRegistry {
       name,
       hostId,
       tokenHash: hashToken(token),
+      publicKeyJwk,
       createdAt: timestamp,
       lastSeenAt: timestamp,
     };
     this.devices.set(device.id, device);
     await this.enqueuePersist();
-    const { tokenHash: _tokenHash, ...view } = device;
+    const { tokenHash: _tokenHash, publicKeyJwk: _publicKeyJwk, ...view } = device;
     return { token, device: view };
   }
 
@@ -119,7 +150,7 @@ export class DeviceRegistry {
       void this.enqueuePersist().catch((error) => {
         console.error("[relay] failed to persist device registry", error);
       });
-      const { tokenHash: _tokenHash, ...view } = device;
+      const { tokenHash: _tokenHash, publicKeyJwk: _publicKeyJwk, ...view } = device;
       return view;
     }
     return undefined;
@@ -130,8 +161,34 @@ export class DeviceRegistry {
     if (device === undefined) return undefined;
     device.revokedAt = now.toISOString();
     await this.enqueuePersist();
-    const { tokenHash: _tokenHash, ...view } = device;
+    const { tokenHash: _tokenHash, publicKeyJwk: _publicKeyJwk, ...view } = device;
     return view;
+  }
+
+  async verifySignature(
+    deviceId: string,
+    material: string,
+    signature: string,
+  ): Promise<boolean> {
+    const device = this.devices.get(deviceId);
+    if (device === undefined || device.revokedAt !== undefined) return false;
+    try {
+      const key = await webcrypto.subtle.importKey(
+        "jwk",
+        device.publicKeyJwk,
+        { name: "ECDSA", namedCurve: "P-256" },
+        false,
+        ["verify"],
+      );
+      return await webcrypto.subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        key,
+        base64UrlToBytes(signature),
+        new TextEncoder().encode(material),
+      );
+    } catch {
+      return false;
+    }
   }
 
   private enqueuePersist(): Promise<void> {

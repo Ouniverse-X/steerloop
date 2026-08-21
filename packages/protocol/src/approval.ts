@@ -38,3 +38,33 @@ export function canonicalizeApproval(material: ApprovalDigestMaterial): string {
       .sort(),
   });
 }
+
+export interface ApprovalDecisionSignatureMaterial {
+  commandId: string;
+  hostId: string;
+  sessionId: string;
+  approvalId: string;
+  requestDigest: string;
+  decision: string;
+  deviceId: string;
+  issuedAt: string;
+  expiresAt: string;
+  signedAt: string;
+}
+
+export function canonicalizeApprovalDecision(
+  material: ApprovalDecisionSignatureMaterial,
+): string {
+  return JSON.stringify({
+    commandId: material.commandId.normalize("NFC"),
+    hostId: material.hostId.normalize("NFC"),
+    sessionId: material.sessionId.normalize("NFC"),
+    approvalId: material.approvalId.normalize("NFC"),
+    requestDigest: material.requestDigest.normalize("NFC"),
+    decision: material.decision,
+    deviceId: material.deviceId.normalize("NFC"),
+    issuedAt: material.issuedAt,
+    expiresAt: material.expiresAt,
+    signedAt: material.signedAt,
+  });
+}

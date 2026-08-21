@@ -1,8 +1,10 @@
 import {
   PROTOCOL_VERSION,
+  canonicalizeApprovalDecision,
   type CommandEnvelope,
   type EventEnvelope,
 } from "@steerloop/protocol";
+import { webcrypto } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +15,16 @@ import { createRelayServer, type RelayServer } from "../src/server.js";
 const TOKEN = "test-token-with-enough-entropy";
 const openServers: RelayServer[] = [];
 const openSockets: WebSocket[] = [];
+
+interface TestDeviceKeyPair {
+  privateKey: CryptoKey;
+  publicKeyJwk: JsonWebKey;
+}
+
+interface PairResult {
+  body: Record<string, unknown>;
+  privateKey: CryptoKey;
+}
 
 afterEach(async () => {
   for (const socket of openSockets.splice(0)) socket.terminate();
@@ -74,20 +86,100 @@ async function nextFrame(socket: WebSocket): Promise<unknown> {
   return (await nextFrames(socket, 1))[0];
 }
 
-async function pairDevice(port: number, code: string): Promise<Record<string, unknown>> {
+function receivesFrameWithin(socket: WebSocket, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const onMessage = () => {
+      clearTimeout(timer);
+      socket.off("error", onError);
+      resolve(true);
+    };
+    const onError = (error: Error) => {
+      clearTimeout(timer);
+      socket.off("message", onMessage);
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+      resolve(false);
+    }, timeoutMs);
+    socket.once("message", onMessage);
+    socket.once("error", onError);
+  });
+}
+
+function bytesToBase64Url(bytes: ArrayBuffer): string {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+async function createDeviceKeyPair(): Promise<TestDeviceKeyPair> {
+  const pair = await webcrypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  return {
+    privateKey: pair.privateKey,
+    publicKeyJwk: await webcrypto.subtle.exportKey("jwk", pair.publicKey),
+  };
+}
+
+async function pairDevice(port: number, code: string): Promise<PairResult> {
+  const keyPair = await createDeviceKeyPair();
   let lastStatus = 0;
   for (let index = 0; index < 20; index += 1) {
     const response = await fetch(`http://127.0.0.1:${port}/pair`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, devicePublicKey: keyPair.publicKeyJwk }),
     });
     lastStatus = response.status;
     const body = await response.json() as Record<string, unknown>;
-    if (response.status === 200) return body;
+    if (response.status === 200) return { body, privateKey: keyPair.privateKey };
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error(`Pairing did not become available; last status ${lastStatus}`);
+}
+
+async function signApprovalCommand(
+  command: CommandEnvelope,
+  deviceId: string,
+  privateKey: CryptoKey,
+): Promise<CommandEnvelope> {
+  if (command.command.type !== "approval.resolve") return command;
+  const signedAt = new Date().toISOString();
+  const material = canonicalizeApprovalDecision({
+    commandId: command.commandId,
+    hostId: command.hostId,
+    sessionId: command.sessionId,
+    approvalId: command.command.payload.approvalId,
+    requestDigest: command.command.payload.requestDigest,
+    decision: command.command.payload.decision,
+    deviceId,
+    issuedAt: command.issuedAt,
+    expiresAt: command.expiresAt,
+    signedAt,
+  });
+  const signature = await webcrypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    privateKey,
+    new TextEncoder().encode(material),
+  );
+  return {
+    ...command,
+    command: {
+      ...command.command,
+      payload: {
+        ...command.command.payload,
+        authorization: {
+          deviceId,
+          algorithm: "ECDSA-P256-SHA256",
+          signedAt,
+          signature: bytesToBase64Url(signature),
+        },
+      },
+    },
+  };
 }
 
 async function authenticateClient(socket: WebSocket): Promise<void> {
@@ -185,7 +277,7 @@ describe("relay", () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     }));
 
-    const body = await pairDevice(port, "abcd-1234");
+    const { body } = await pairDevice(port, "abcd-1234");
     expect(body).toMatchObject({ ok: true, hostId: "host-1" });
     expect(String(body.token)).toMatch(/^slc_[a-f0-9]{64}$/);
     expect(body.device).toMatchObject({ hostId: "host-1" });
@@ -224,7 +316,7 @@ describe("relay", () => {
     const replay = await fetch(`http://127.0.0.1:${port}/pair`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code: "ABCD-1234" }),
+      body: JSON.stringify({ code: "ABCD-1234", devicePublicKey: (await createDeviceKeyPair()).publicKeyJwk }),
     });
     expect(replay.status).toBe(401);
 
@@ -242,6 +334,74 @@ describe("relay", () => {
       kind: "auth.result",
       ok: false,
     });
+  });
+
+  it("requires paired approval decisions to be signed by the authenticated device", async () => {
+    const port = await startRelay();
+    const agent = await connect(port);
+    await authenticateAgent(agent);
+    agent.send(JSON.stringify({
+      kind: "pairing.offer",
+      protocolVersion: PROTOCOL_VERSION,
+      hostId: "host-1",
+      code: "SIGN-0001",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }));
+
+    const { body, privateKey } = await pairDevice(port, "SIGN-0001");
+    const token = String(body.token);
+    const device = body.device as Record<string, unknown>;
+    const deviceId = String(device.id);
+
+    const client = await connect(port);
+    const frames = nextFrames(client, 2);
+    client.send(
+      JSON.stringify({
+        kind: "auth",
+        protocolVersion: PROTOCOL_VERSION,
+        role: "client",
+        token,
+      }),
+    );
+    const [authResult] = await frames;
+    expect(authResult).toMatchObject({ kind: "auth.result", ok: true });
+
+    const command: CommandEnvelope = {
+      kind: "command",
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "approval-command-1",
+      hostId: "host-1",
+      sessionId: "session-1",
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30_000).toISOString(),
+      command: {
+        type: "approval.resolve",
+        payload: {
+          approvalId: "approval-1",
+          requestDigest: "a".repeat(64),
+          decision: "approve_once",
+        },
+      },
+    };
+
+    const unsignedResult = nextFrame(client);
+    client.send(JSON.stringify(command));
+    await expect(unsignedResult).resolves.toMatchObject({
+      kind: "command.result",
+      commandId: "approval-command-1",
+      ok: false,
+      error: "Missing device approval signature",
+    });
+    await expect(receivesFrameWithin(agent, 50)).resolves.toBe(false);
+
+    const signedCommand = await signApprovalCommand(
+      { ...command, commandId: "approval-command-2" },
+      deviceId,
+      privateKey,
+    );
+    const forwarded = nextFrame(agent);
+    client.send(JSON.stringify(signedCommand));
+    await expect(forwarded).resolves.toEqual(signedCommand);
   });
 
   it("keeps paired device tokens across relay restarts", async () => {
@@ -267,7 +427,7 @@ describe("relay", () => {
       code: "KEEP-0001",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     }));
-    const pairBody = await pairDevice(firstPort, "KEEP-0001");
+    const { body: pairBody } = await pairDevice(firstPort, "KEEP-0001");
     const token = String(pairBody.token);
 
     agent.terminate();
@@ -319,11 +479,7 @@ describe("relay", () => {
       error: "Command has expired",
     });
 
-    const forwarded = await Promise.race([
-      nextFrame(agent).then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 50)),
-    ]);
-    expect(forwarded).toBe(false);
+    await expect(receivesFrameWithin(agent, 50)).resolves.toBe(false);
   });
 
   it("restores the event snapshot after a relay restart", async () => {

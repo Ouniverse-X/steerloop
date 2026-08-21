@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PROTOCOL_VERSION,
   canonicalizeApproval,
+  canonicalizeApprovalDecision,
   commandEnvelopeSchema,
   createEmptyState,
   eventEnvelopeSchema,
@@ -78,6 +79,35 @@ describe("wire protocol", () => {
 
     expect(digest(base)).toBe(digest(reordered));
     expect(digest(base)).not.toBe(digest(changed));
+  });
+
+  it("binds approval decision signatures to the device identity", () => {
+    const base = canonicalizeApprovalDecision({
+      commandId: "command-1",
+      hostId: "host-1",
+      sessionId: "session-1",
+      approvalId: "approval-1",
+      requestDigest: "a".repeat(64),
+      decision: "approve_once",
+      deviceId: "device-1",
+      issuedAt: "2026-08-21T00:00:00.000Z",
+      expiresAt: "2026-08-21T00:00:30.000Z",
+      signedAt: "2026-08-21T00:00:01.000Z",
+    });
+    const changedDevice = canonicalizeApprovalDecision({
+      commandId: "command-1",
+      hostId: "host-1",
+      sessionId: "session-1",
+      approvalId: "approval-1",
+      requestDigest: "a".repeat(64),
+      decision: "approve_once",
+      deviceId: "device-2",
+      issuedAt: "2026-08-21T00:00:00.000Z",
+      expiresAt: "2026-08-21T00:00:30.000Z",
+      signedAt: "2026-08-21T00:00:01.000Z",
+    });
+
+    expect(digest(base)).not.toBe(digest(changedDevice));
   });
 });
 

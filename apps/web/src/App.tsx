@@ -15,6 +15,7 @@ import {
   listDevices,
   pairWithRelay,
   revokeDevice,
+  signApprovalCommand,
   type ConnectionUpdate,
   type DeviceView,
 } from "./connection.js";
@@ -47,6 +48,7 @@ const connectionCopy = {
 interface Settings {
   url: string;
   token: string;
+  deviceId?: string;
 }
 
 function storedRelayUrl(location: Location): string {
@@ -69,9 +71,11 @@ function storedRelayUrl(location: Location): string {
 }
 
 function loadSettings(): Settings {
+  const deviceId = localStorage.getItem("steerloop.deviceId") ?? undefined;
   return {
     url: storedRelayUrl(window.location),
     token: localStorage.getItem("steerloop.token") ?? DEVELOPMENT_TOKEN,
+    ...(deviceId === undefined ? {} : { deviceId }),
   };
 }
 
@@ -542,16 +546,18 @@ export function App() {
       setNotice("Approval blocked: the request could not be verified");
       return;
     }
-    send(
-      buildCommand(approval.hostId, approval.sessionId, {
-        type: "approval.resolve",
-        payload: {
-          approvalId: approval.id,
-          requestDigest: approval.requestDigest,
-          decision,
-        },
-      }),
-    );
+    let command = buildCommand(approval.hostId, approval.sessionId, {
+      type: "approval.resolve",
+      payload: {
+        approvalId: approval.id,
+        requestDigest: approval.requestDigest,
+        decision,
+      },
+    });
+    if (settings.deviceId !== undefined) {
+      command = await signApprovalCommand(command, settings.deviceId);
+    }
+    send(command);
   }
 
   function saveSettings(event: FormEvent): void {
@@ -559,6 +565,7 @@ export function App() {
     const next = { url: draftSettings.url.trim(), token: draftSettings.token };
     localStorage.setItem("steerloop.relayUrl", next.url);
     localStorage.setItem("steerloop.token", next.token);
+    localStorage.removeItem("steerloop.deviceId");
     setSettings(next);
     setSettingsOpen(false);
   }
@@ -577,8 +584,11 @@ export function App() {
       const next = { url: draftSettings.url.trim(), token: result.token ?? "" };
       localStorage.setItem("steerloop.relayUrl", next.url);
       localStorage.setItem("steerloop.token", next.token);
+      if (result.device?.id !== undefined) {
+        localStorage.setItem("steerloop.deviceId", result.device.id);
+      }
       setDraftSettings(next);
-      setSettings(next);
+      setSettings(result.device?.id === undefined ? next : { ...next, deviceId: result.device.id });
       setPairingCode("");
       setSettingsOpen(false);
       setNotice(`Paired with ${result.hostId ?? "host"}`);

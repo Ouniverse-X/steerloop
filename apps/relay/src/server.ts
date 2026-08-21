@@ -4,6 +4,7 @@ import {
   PROTOCOL_VERSION,
   agentToRelayFrameSchema,
   authFrameSchema,
+  canonicalizeApprovalDecision,
   clientToRelayFrameSchema,
   commandEnvelopeSchema,
   type AuthFrame,
@@ -13,7 +14,7 @@ import {
 } from "@steerloop/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import type { RelayConfig } from "./config.js";
-import { DeviceRegistry } from "./device-registry.js";
+import { DeviceRegistry, isP256PublicKey } from "./device-registry.js";
 import { EventJournal } from "./event-journal.js";
 
 interface UnauthenticatedPeer {
@@ -152,12 +153,18 @@ export function createRelayServer(config: RelayConfig): RelayServer {
           response.end(JSON.stringify({ ok: false, error: "invalid_pairing_code" }));
           return;
         }
+        if (!isP256PublicKey(record.devicePublicKey)) {
+          response.writeHead(400, { "content-type": "application/json" });
+          response.end(JSON.stringify({ ok: false, error: "invalid_device_public_key" }));
+          return;
+        }
         pairingOffers.delete(code);
         const issued = await deviceRegistry?.issue(
           offer.hostId,
           typeof record.deviceName === "string" && record.deviceName.trim().length > 0
             ? record.deviceName.trim().slice(0, 128)
             : "Browser device",
+          record.devicePublicKey,
         );
         if (issued === undefined) {
           response.writeHead(503, { "content-type": "application/json" });
@@ -326,7 +333,36 @@ export function createRelayServer(config: RelayConfig): RelayServer {
     broadcastToClients(parsed.data);
   }
 
-  function handleClientFrame(socket: WebSocket, value: unknown): void {
+  async function verifyApprovalAuthorization(
+    peer: ClientPeer,
+    command: ReturnType<typeof commandEnvelopeSchema.parse>,
+  ): Promise<string | undefined> {
+    if (command.command.type !== "approval.resolve") return undefined;
+    if (peer.deviceId === undefined) return undefined;
+    const authorization = command.command.payload.authorization;
+    if (authorization === undefined) return "Missing device approval signature";
+    if (authorization.deviceId !== peer.deviceId) return "Approval signature device mismatch";
+    if (authorization.algorithm !== "ECDSA-P256-SHA256") return "Unsupported approval signature";
+    const valid = await deviceRegistry?.verifySignature(
+      peer.deviceId,
+      canonicalizeApprovalDecision({
+        commandId: command.commandId,
+        hostId: command.hostId,
+        sessionId: command.sessionId,
+        approvalId: command.command.payload.approvalId,
+        requestDigest: command.command.payload.requestDigest,
+        decision: command.command.payload.decision,
+        deviceId: authorization.deviceId,
+        issuedAt: command.issuedAt,
+        expiresAt: command.expiresAt,
+        signedAt: authorization.signedAt,
+      }),
+      authorization.signature,
+    );
+    return valid === true ? undefined : "Invalid approval signature";
+  }
+
+  async function handleClientFrame(socket: WebSocket, peer: ClientPeer, value: unknown): Promise<void> {
     const parsed = clientToRelayFrameSchema.safeParse(value);
     if (!parsed.success || parsed.data.kind === "auth") {
       socket.close(1008, "invalid client frame");
@@ -334,6 +370,14 @@ export function createRelayServer(config: RelayConfig): RelayServer {
     }
 
     const command = commandEnvelopeSchema.parse(parsed.data);
+    const authorizationError = await verifyApprovalAuthorization(peer, command);
+    if (authorizationError !== undefined) {
+      send(
+        socket,
+        commandError(command.commandId, command.hostId, authorizationError),
+      );
+      return;
+    }
     if (Date.parse(command.expiresAt) <= Date.now()) {
       send(
         socket,
@@ -396,7 +440,12 @@ export function createRelayServer(config: RelayConfig): RelayServer {
             socket.close(1011, "relay persistence failure");
           });
       } else {
-        handleClientFrame(socket, value);
+        agentFrameQueue = agentFrameQueue
+          .then(() => handleClientFrame(socket, peer, value))
+          .catch((error) => {
+            console.error("[relay] failed to handle client frame", error);
+            socket.close(1011, "relay command failure");
+          });
       }
     });
 

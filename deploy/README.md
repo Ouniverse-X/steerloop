@@ -66,22 +66,25 @@ npm run start --workspace=@steerloop/agent
 Open `https://<domain>` on the phone, choose **Connect**, and enter the same
 pairing code printed by the host Agent. Relay exchanges it for a browser-local
 client token. The default Relay URL is the same-origin `wss://<domain>/ws`
-endpoint.
+endpoint. During pairing, the browser also registers a P-256 public key; later
+approval decisions from that paired browser are signed by its local private key
+and verified by Relay before being forwarded to the host Agent.
 
 ## Persistence and backups
 
 Relay events are stored in the `relay-data` volume as
 `/data/relay-events.jsonl`. Browser device identities are stored in the same
-volume as `/data/relay-devices.json`; only token hashes are written. Each
-accepted event is synced before broadcast, and the journal is atomically
+volume as `/data/relay-devices.json`; token hashes and device public keys are
+written, but browser private keys stay in browser storage. Each accepted event
+is synced before broadcast, and the journal is atomically
 compacted to the configured history window.
 
 The journal contains session titles, activity summaries, commands, paths, and
 approval metadata. The device registry contains host IDs, device names, token
-hashes, and revocation timestamps. Protect Docker data at rest and include the
-`relay-data` volume in encrypted backups. Removing that volume permanently
-removes Relay history and paired browser devices; it does not delete Codex's
-local thread history on host machines.
+hashes, device public keys, and revocation timestamps. Protect Docker data at
+rest and include the `relay-data` volume in encrypted backups. Removing that
+volume permanently removes Relay history and paired browser devices; it does
+not delete Codex's local thread history on host machines.
 
 ## Update and rollback
 
@@ -106,5 +109,7 @@ validated during startup.
 - The PWA is publicly downloadable, but events and commands require either the
   shared Relay token or a browser token issued through `/pair`.
 - Pairing creates durable browser device records that can be listed and revoked
-  from the Connection dialog. Device-bound approval signatures, token rotation,
-  and end-to-end encrypted Relay storage remain required before team use.
+  from the Connection dialog. Paired approval decisions are signed by the
+  paired browser key and verified against the authenticated device ID. Token
+  rotation and end-to-end encrypted Relay storage remain required before team
+  use.

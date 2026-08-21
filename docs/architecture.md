@@ -36,9 +36,10 @@ repairs only a crash-truncated final record; other corruption fails closed.
 During alpha pairing, an authenticated host registers a short-lived pairing
 code. A browser submits that code to Relay over `/pair`; Relay returns a
 browser-local client token that is accepted for client WebSocket authentication.
-Relay stores only a token hash plus device metadata in its device registry.
-Devices can be listed and revoked over `/devices`. The shared Relay token
-remains required for host connections.
+The browser also registers a P-256 public key. Relay stores only a token hash,
+that public key, and device metadata in its device registry. Devices can be
+listed and revoked over `/devices`. The shared Relay token remains required for
+host connections.
 
 ### Web console
 
@@ -46,6 +47,8 @@ The PWA reduces events into a local view of hosts, sessions, recent activity,
 and pending approvals. It never constructs arbitrary host commands. Before it
 enables an approval decision, it independently recomputes the digest from the
 displayed security-sensitive fields and compares it with the host-bound digest.
+When the browser was paired, approval decisions are signed by that browser's
+local device key before being sent to Relay.
 
 ## Trust boundaries
 
@@ -65,12 +68,15 @@ displayed security-sensitive fields and compares it with the host-bound digest.
 
 During the current alpha, hosts still authenticate with a shared bearer token,
 while browsers can either use that token directly or pair through a short-lived
-host code. Paired browser tokens survive Relay restarts and can be revoked, but
-approval decisions are not yet signed by a device key. The roadmap adds
-device-bound signatures, end-to-end encryption, and stronger rotation policy.
-Host-side and browser-side digest checks are present from the beginning, so a
-relay cannot substitute or misrepresent a different pending request without the
-decision being blocked.
+host code. Paired browser tokens survive Relay restarts and can be revoked.
+For paired browsers, Relay requires `approval.resolve` commands to include an
+ECDSA P-256 signature over the command ID, host/session IDs, approval ID,
+request digest, decision, device ID, and command timestamps. Shared-token
+browser clients remain an admin/development path and are not device-signed.
+The roadmap adds QR pairing, end-to-end encryption, and stronger rotation
+policy. Host-side and browser-side digest checks are present from the beginning,
+so a relay cannot substitute or misrepresent a different pending request without
+the decision being blocked.
 
 ## Remote edge
 

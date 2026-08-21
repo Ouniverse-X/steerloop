@@ -133,6 +133,12 @@ export const normalizedCommandSchema = z.discriminatedUnion("type", [
       approvalId: idSchema,
       requestDigest: z.string().regex(/^[a-f0-9]{64}$/),
       decision: approvalDecisionSchema,
+      authorization: z.object({
+        deviceId: idSchema,
+        algorithm: z.literal("ECDSA-P256-SHA256"),
+        signedAt: timestampSchema,
+        signature: z.string().min(64).max(512).regex(/^[A-Za-z0-9_-]+$/),
+      }).optional(),
     }),
   }),
   z.object({
