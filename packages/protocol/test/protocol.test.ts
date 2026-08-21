@@ -1,0 +1,176 @@
+import { createHash } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import {
+  PROTOCOL_VERSION,
+  canonicalizeApproval,
+  commandEnvelopeSchema,
+  createEmptyState,
+  eventEnvelopeSchema,
+  reduceEvent,
+  type EventEnvelope,
+} from "../src/index.js";
+
+function digest(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function event(
+  sequence: number,
+  normalizedEvent: EventEnvelope["event"],
+  sessionId?: string,
+): EventEnvelope {
+  return eventEnvelopeSchema.parse({
+    kind: "event",
+    protocolVersion: PROTOCOL_VERSION,
+    eventId: `event-${sequence}`,
+    sequence,
+    hostId: "host-1",
+    ...(sessionId === undefined ? {} : { sessionId }),
+    emittedAt: new Date(sequence * 1_000).toISOString(),
+    event: normalizedEvent,
+  });
+}
+
+describe("wire protocol", () => {
+  it("rejects commands outside the remote allowlist", () => {
+    const parsed = commandEnvelopeSchema.safeParse({
+      kind: "command",
+      protocolVersion: PROTOCOL_VERSION,
+      commandId: "command-1",
+      hostId: "host-1",
+      sessionId: "session-1",
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30_000).toISOString(),
+      command: {
+        type: "shell.execute",
+        payload: { command: "rm -rf /" },
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it("binds approval digests to every security-relevant display field", () => {
+    const base = canonicalizeApproval({
+      approvalId: "approval-1",
+      kind: "command",
+      command: "npm test",
+      cwd: "/workspace/app",
+      reason: "Run the test suite",
+      requestedPermissions: ["network:registry.npmjs.org", "write:/workspace/app"],
+    });
+    const reordered = canonicalizeApproval({
+      approvalId: "approval-1",
+      kind: "command",
+      command: "npm test",
+      cwd: "/workspace/app",
+      reason: "Run the test suite",
+      requestedPermissions: ["write:/workspace/app", "network:registry.npmjs.org"],
+    });
+    const changed = canonicalizeApproval({
+      approvalId: "approval-1",
+      kind: "command",
+      command: "npm publish",
+      cwd: "/workspace/app",
+      reason: "Run the test suite",
+      requestedPermissions: ["write:/workspace/app", "network:registry.npmjs.org"],
+    });
+
+    expect(digest(base)).toBe(digest(reordered));
+    expect(digest(base)).not.toBe(digest(changed));
+  });
+});
+
+describe("control-plane reducer", () => {
+  it("tracks a session through a one-time approval", () => {
+    const material = canonicalizeApproval({
+      approvalId: "approval-1",
+      kind: "command",
+      command: "npm test",
+      cwd: "/workspace/app",
+    });
+
+    const events: EventEnvelope[] = [
+      event(1, {
+        type: "host.connected",
+        payload: {
+          name: "Devbox",
+          platform: "linux",
+          agentVersion: "0.1.0",
+          capabilities: ["approval.resolve"],
+        },
+      }),
+      event(
+        2,
+        {
+          type: "session.upserted",
+          payload: {
+            title: "Fix integration tests",
+            source: "codex",
+            status: "running",
+            cwd: "/workspace/app",
+          },
+        },
+        "session-1",
+      ),
+      event(
+        3,
+        {
+          type: "approval.requested",
+          payload: {
+            approvalId: "approval-1",
+            kind: "command",
+            title: "Run test suite",
+            command: "npm test",
+            cwd: "/workspace/app",
+            requestDigest: digest(material),
+            expiresAt: new Date(Date.now() + 30_000).toISOString(),
+          },
+        },
+        "session-1",
+      ),
+      event(
+        4,
+        {
+          type: "approval.resolved",
+          payload: {
+            approvalId: "approval-1",
+            decision: "approve_once",
+            resolvedAt: new Date().toISOString(),
+          },
+        },
+        "session-1",
+      ),
+    ];
+
+    const state = events.reduce(reduceEvent, createEmptyState());
+
+    expect(state.hosts["host-1"]?.online).toBe(true);
+    expect(state.sessions["session-1"]?.status).toBe("running");
+    expect(state.approvals["approval-1"]?.status).toBe("approve_once");
+  });
+
+  it("ignores duplicate and out-of-order host events", () => {
+    const first = event(2, {
+      type: "host.connected",
+      payload: {
+        name: "Current name",
+        platform: "linux",
+        agentVersion: "0.1.0",
+        capabilities: [],
+      },
+    });
+    const stale = event(1, {
+      type: "host.connected",
+      payload: {
+        name: "Stale name",
+        platform: "linux",
+        agentVersion: "0.1.0",
+        capabilities: [],
+      },
+    });
+
+    const afterFirst = reduceEvent(createEmptyState(), first);
+    expect(reduceEvent(afterFirst, stale)).toBe(afterFirst);
+  });
+});
