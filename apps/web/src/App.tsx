@@ -98,19 +98,54 @@ function StatusPill({ status }: { status: SessionStatus }) {
   );
 }
 
-function EmptyState() {
+interface EmptyStateProps {
+  connection: ConnectionUpdate;
+  settings: Settings;
+  onlineHosts: number;
+  sourceFilter: string;
+  totalSessions: number;
+  onOpenSettings(): void;
+}
+
+function EmptyState({
+  connection,
+  settings,
+  onlineHosts,
+  sourceFilter,
+  totalSessions,
+  onOpenSettings,
+}: EmptyStateProps) {
+  const connected = connection.status === "connected";
+  const filteredOut = connected && totalSessions > 0 && sourceFilter !== "all";
+  const heading = !connected
+    ? "Connect to a relay first."
+    : filteredOut
+      ? "No sessions match this filter."
+      : onlineHosts === 0
+        ? "Waiting for a host agent."
+        : "Waiting for session events.";
+  const body = !connected
+    ? "The console has not authenticated with Relay yet. Check the WebSocket URL and token, then reconnect."
+    : filteredOut
+      ? "Switch the source filter back to All sources to see the sessions already reported by Relay."
+      : onlineHosts === 0
+        ? "Start a Steerloop Agent on the machine running Codex. The console will restore sessions as soon as the agent connects."
+        : "Relay is live and at least one host is online, but no sessions have been reported yet.";
+
   return (
     <section className="empty-state panel">
-      <div className="empty-orbit" aria-hidden="true">
+      <div className={`empty-orbit${connected ? " connected" : ""}`} aria-hidden="true">
         <span />
       </div>
-      <p className="eyebrow">Awaiting a host</p>
-      <h2>Your loops will appear here.</h2>
-      <p>
-        Start the relay and a Steerloop Agent. This console will restore the latest
-        session snapshot as soon as the connection is authenticated.
-      </p>
-      <code>npm run dev</code>
+      <p className="eyebrow">{connected ? "Relay connected" : "Relay disconnected"}</p>
+      <h2>{heading}</h2>
+      <p>{body}</p>
+      <div className="empty-actions">
+        <code>{settings.url}</code>
+        <button className="button button-secondary" type="button" onClick={onOpenSettings}>
+          Connection settings
+        </button>
+      </div>
     </section>
   );
 }
@@ -204,10 +239,21 @@ interface SessionListProps {
   sessions: SessionView[];
   selectedId: string | undefined;
   now: number;
+  sources: string[];
+  sourceFilter: string;
   onSelect(id: string): void;
+  onSourceFilterChange(source: string): void;
 }
 
-function SessionList({ sessions, selectedId, now, onSelect }: SessionListProps) {
+function SessionList({
+  sessions,
+  selectedId,
+  now,
+  sources,
+  sourceFilter,
+  onSelect,
+  onSourceFilterChange,
+}: SessionListProps) {
   return (
     <nav className="session-list" aria-label="Agent sessions">
       <div className="panel-heading">
@@ -217,6 +263,20 @@ function SessionList({ sessions, selectedId, now, onSelect }: SessionListProps) 
         </div>
         <span className="count-badge">{sessions.length}</span>
       </div>
+      {sources.length > 1 && (
+        <div className="source-tabs" role="tablist" aria-label="Session source">
+          {["all", ...sources].map((source) => (
+            <button
+              key={source}
+              className={sourceFilter === source ? "selected" : ""}
+              type="button"
+              onClick={() => onSourceFilterChange(source)}
+            >
+              {source === "all" ? "All" : source}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="session-items">
         {sessions.map((session) => (
           <button
@@ -379,6 +439,7 @@ export function App() {
   const [draftSettings, setDraftSettings] = useState<Settings>(settings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [notice, setNotice] = useState<string>();
   const [approvalIntegrity, setApprovalIntegrity] = useState<Record<string, ApprovalIntegrity>>({});
   const [now, setNow] = useState(Date.now());
@@ -426,11 +487,21 @@ export function App() {
     };
   }, [state.approvals]);
 
-  const sessions = useMemo(
+  const allSessions = useMemo(
     () => Object.values(state.sessions).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
     [state.sessions],
   );
-  const selected = state.sessions[selectedId ?? ""] ?? sessions[0];
+  const sources = useMemo(
+    () => [...new Set(allSessions.map((session) => session.source))].sort(),
+    [allSessions],
+  );
+  const sessions = useMemo(
+    () => sourceFilter === "all"
+      ? allSessions
+      : allSessions.filter((session) => session.source === sourceFilter),
+    [allSessions, sourceFilter],
+  );
+  const selected = sessions.find((session) => session.id === selectedId) ?? sessions[0];
   const pendingApprovals = Object.values(state.approvals).filter(
     (approval) => approval.status === "pending",
   );
@@ -439,6 +510,14 @@ export function App() {
     : pendingApprovals.filter((approval) => approval.sessionId === selected.id);
   const onlineHosts = Object.values(state.hosts).filter((host) => host.online).length;
   const runningSessions = sessions.filter((session) => session.status === "running").length;
+  const codexSessions = allSessions.filter((session) => session.source === "codex").length;
+  const latestHostSeenAt = Object.values(state.hosts).reduce<string | undefined>(
+    (latest, host) => {
+      if (latest === undefined) return host.lastSeenAt;
+      return Date.parse(host.lastSeenAt) > Date.parse(latest) ? host.lastSeenAt : latest;
+    },
+    undefined,
+  );
 
   function send(command: CommandEnvelope): void {
     try {
@@ -488,7 +567,7 @@ export function App() {
             <i />{connectionCopy[connection.status]}
           </span>
           <button className="settings-button" type="button" onClick={() => setSettingsOpen(true)}>
-            <span aria-hidden="true">⌘</span><span>Connect</span>
+            <span aria-hidden="true">⌘</span><span>Connection</span>
           </button>
         </div>
       </header>
@@ -502,17 +581,49 @@ export function App() {
           <dl className="metrics">
             <div><dt>Hosts online</dt><dd>{onlineHosts.toString().padStart(2, "0")}</dd></div>
             <div><dt>Running</dt><dd>{runningSessions.toString().padStart(2, "0")}</dd></div>
+            <div><dt>Codex</dt><dd>{codexSessions.toString().padStart(2, "0")}</dd></div>
             <div className={pendingApprovals.length > 0 ? "metric-alert" : ""}>
               <dt>Needs you</dt><dd>{pendingApprovals.length.toString().padStart(2, "0")}</dd>
             </div>
           </dl>
         </section>
 
+        <section className="connection-panel panel" aria-label="Connection health">
+          <div>
+            <p className="eyebrow">Relay</p>
+            <strong>{connectionCopy[connection.status]}</strong>
+            {connection.detail !== undefined && <span>{connection.detail}</span>}
+          </div>
+          <div>
+            <p className="eyebrow">Endpoint</p>
+            <code>{settings.url}</code>
+          </div>
+          <div>
+            <p className="eyebrow">Last host signal</p>
+            <span>{latestHostSeenAt === undefined ? "No host seen" : relativeTime(latestHostSeenAt, now)}</span>
+          </div>
+        </section>
+
         {sessions.length === 0 ? (
-          <EmptyState />
+          <EmptyState
+            connection={connection}
+            settings={settings}
+            onlineHosts={onlineHosts}
+            sourceFilter={sourceFilter}
+            totalSessions={allSessions.length}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
         ) : (
           <div className="workspace">
-            <SessionList sessions={sessions} selectedId={selected?.id} now={now} onSelect={setSelectedId} />
+            <SessionList
+              sessions={sessions}
+              selectedId={selected?.id}
+              now={now}
+              sources={sources}
+              sourceFilter={sourceFilter}
+              onSelect={setSelectedId}
+              onSourceFilterChange={setSourceFilter}
+            />
             {selected !== undefined && (
               <SessionDetail
                 key={selected.id}

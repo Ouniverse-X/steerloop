@@ -185,6 +185,20 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
 .metrics dd { margin: 4px 0 0; font-family: Georgia, serif; font-size: 29px; }
 .metrics .metric-alert dd { color: var(--coral); }
 
+.connection-panel {
+  display: grid;
+  grid-template-columns: minmax(150px, .5fr) minmax(0, 1.1fr) minmax(150px, .5fr);
+  gap: 1px;
+  overflow: hidden;
+  margin: -14px 0 24px;
+  background: var(--line);
+}
+.connection-panel div { min-width: 0; padding: 16px 18px; background: rgba(16, 23, 21, .88); }
+.connection-panel strong, .connection-panel span, .connection-panel code { display: block; min-width: 0; color: #c8d4ce; font-size: 12px; }
+.connection-panel strong { color: var(--ink); font-size: 15px; font-weight: 560; }
+.connection-panel code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-panel div > span { margin-top: 4px; color: var(--muted); }
+
 .panel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -207,6 +221,27 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
 .session-list > .panel-heading { padding: 20px 20px 15px; }
 .panel-heading h2, .side-stack h2, .prompt-card h2 { margin: 0; font-size: 18px; font-weight: 560; letter-spacing: -.025em; }
 .count-badge { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 8px; background: rgba(255,255,255,.05); color: var(--muted); font-size: 12px; }
+
+.source-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.source-tabs button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.source-tabs button.selected { border-color: rgba(158,245,207,.28); background: rgba(158,245,207,.08); color: var(--mint); }
 
 .session-items { padding: 0 8px 9px; }
 .session-item {
@@ -333,9 +368,13 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
 .empty-state h2 { margin: 3px 0 8px; font-size: 27px; font-weight: 520; letter-spacing: -.04em; }
 .empty-state > p:not(.eyebrow) { max-width: 520px; margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .empty-state code { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0,0,0,.18); color: var(--mint); font-size: 11px; }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: min(680px, 100%); }
+.empty-actions code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty-orbit { position: relative; width: 72px; height: 72px; margin-bottom: 25px; border: 1px solid rgba(158,245,207,.22); border-radius: 50%; animation: spin 7s linear infinite; }
 .empty-orbit::before { position: absolute; inset: 13px; content: ""; border: 1px solid var(--line); border-radius: 50%; }
 .empty-orbit span { position: absolute; top: 5px; left: 13px; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 13px var(--mint); }
+.empty-orbit.connected { border-color: rgba(244,203,114,.24); }
+.empty-orbit.connected span { background: var(--yellow); box-shadow: 0 0 13px var(--yellow); }
 
 .dialog-backdrop { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(2,6,5,.76); backdrop-filter: blur(9px); }
 .settings-dialog { position: relative; width: min(440px, 100%); padding: 30px; border: 1px solid rgba(158,245,207,.18); border-radius: 20px; background: #131c19; box-shadow: 0 25px 100px rgba(0,0,0,.55); }
@@ -370,9 +409,11 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
   .overview { display: block; margin-bottom: 25px; }
   .overview h1 { font-size: clamp(35px, 12.5vw, 57px); }
   .metrics { margin-top: 25px; }
-  .metrics div { flex: 1; min-width: 0; padding: 11px 12px; }
+  .metrics div { flex: 1; min-width: 0; padding: 11px 10px; }
   .metrics dt { font-size: 8px; }
   .metrics dd { font-size: 24px; }
+  .connection-panel { grid-template-columns: 1fr; margin: -10px 0 16px; }
+  .connection-panel code { white-space: normal; overflow-wrap: anywhere; }
   .workspace { display: block; }
   .session-list { position: static; margin-bottom: 14px; }
   .session-items { display: flex; gap: 7px; overflow-x: auto; padding: 0 11px 12px; scrollbar-width: none; }
