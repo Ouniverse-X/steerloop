@@ -1,0 +1,30 @@
+{
+	admin off
+}
+
+{$STEERLOOP_DOMAIN} {
+	encode zstd gzip
+
+	@relay path /ws /healthz
+	handle @relay {
+		reverse_proxy relay:8787
+	}
+	handle {
+		reverse_proxy web:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss://{$STEERLOOP_DOMAIN}; manifest-src 'self'; worker-src 'self'"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

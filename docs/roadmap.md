@@ -21,18 +21,18 @@ Exit condition: `npm run dev` demonstrates one full approval round trip and
 - [x] Return one-time accept, decline, and cancel decisions
 - [x] Queue or steer text input
 - [x] Interrupt an active turn
-- [ ] Compatibility tests against a pinned Codex CLI version
+- [x] Compatibility tests against a pinned Codex CLI version
 
 Exit condition: a real Codex session can be monitored and unblocked from the
 web console without exposing App Server on the network.
 
 ## Milestone 2 — Reliable remote alpha
 
-- [ ] Durable local event journal
-- [ ] Relay reconnect and event replay
+- [x] Durable local event journal
+- [x] Relay reconnect and event replay
 - [ ] QR pairing and per-device identity
 - [ ] Device-bound approval signatures
-- [ ] TLS deployment guide
+- [x] TLS deployment guide
 - [ ] PWA install and push notifications
 - [ ] Host service installation for Linux and macOS
 

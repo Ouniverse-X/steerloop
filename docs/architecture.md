@@ -28,9 +28,10 @@ App Server WebSocket exposure is intentionally out of scope.
 
 ### Relay
 
-The relay authenticates connections, forwards events to subscribed clients,
-forwards allowlisted commands to the intended host, and keeps a bounded in-memory
-event history for reconnects. Persistent encrypted history comes later.
+The relay authenticates connections, forwards events to subscribed clients, and
+forwards allowlisted commands to the intended host. Validated events are synced
+to a bounded JSONL journal before broadcast. Startup replays that journal and
+repairs only a crash-truncated final record; other corruption fails closed.
 
 ### Web console
 
@@ -60,6 +61,13 @@ roadmap replaces this with device identities, end-to-end encryption, and signed
 approval decisions. Host-side and browser-side digest checks are present from
 the beginning, so a relay cannot substitute or misrepresent a different pending
 request without the decision being blocked.
+
+## Remote edge
+
+The supported remote-alpha topology puts Caddy in front of both the static PWA
+and Relay. HTTPS and WSS share one origin, and only ports 80 and 443 are public.
+Relay port 8787 stays inside the container network. The host Agent initiates its
+outbound WSS connection; Codex App Server remains a local stdio child process.
 
 ## Event ordering
 

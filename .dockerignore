@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+coverage
+steerloop-data
+.env
+.env.*
+!.env.example
+deploy/secrets/*
+!deploy/secrets/.gitkeep

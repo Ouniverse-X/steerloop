@@ -43,6 +43,9 @@ See [the getting-started guide](docs/getting-started.md),
 [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and
 [product proposal](docs/product-proposal.md) for details.
 
+For an internet-facing HTTPS/WSS test deployment, follow the
+[remote deployment guide](deploy/README.md).
+
 ## Local development
 
 Requirements:

@@ -28,6 +28,11 @@ The development relay is not production-ready. In particular:
 - the PWA is intended for localhost development;
 - no component should be exposed publicly without TLS and a strong token.
 
+The reference remote deployment terminates HTTPS/WSS at Caddy, mounts the Relay
+token from a secret file, keeps port 8787 private, and uses read-only container
+root filesystems. It is suitable for controlled alpha testing, not multi-user
+production.
+
 The host agent never accepts arbitrary shell commands from the relay. Remote
 commands are validated against a narrow protocol allowlist, and approval
 decisions are bound to the digest of a pending request. The browser recomputes
@@ -37,3 +42,7 @@ displayed request does not match.
 During the alpha, the browser stores its Relay URL and bearer token in local
 storage. Do not use a shared or untrusted browser profile, and treat any script
 running on the PWA origin as security-sensitive.
+
+The persistent Relay journal contains commands, filesystem paths, session
+summaries, and approval metadata. Protect its volume with host access controls
+and encrypted backups. The alpha journal is not encrypted by Steerloop itself.

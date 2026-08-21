@@ -11,3 +11,6 @@ coverage/
 .idea/
 .vscode/
 steerloop-data/
+deploy/.env
+deploy/secrets/*
+!deploy/secrets/.gitkeep

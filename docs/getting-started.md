@@ -66,9 +66,13 @@ The main settings are documented in [`.env.example`](../.env.example). Node does
 not automatically load that file: export values in the shell or use the service
 manager that will run Steerloop.
 
-For production-mode Relay and Agent processes, `STEERLOOP_TOKEN` is mandatory.
-Use a unique high-entropy value and do not commit it. The PWA keeps its configured
-Relay URL and token in that browser's local storage during the alpha.
+For production-mode Relay and Agent processes, set exactly one of
+`STEERLOOP_TOKEN` or `STEERLOOP_TOKEN_FILE`. Use a unique high-entropy value and
+do not commit it. The PWA keeps its configured Relay URL and token in that
+browser's local storage during the alpha.
+
+For remote HTTPS/WSS deployment, persistent event storage, and secret-file token
+configuration, continue with the [deployment guide](../deploy/README.md).
 
 ## Validate a change
 

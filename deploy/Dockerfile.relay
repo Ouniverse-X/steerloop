@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1.7
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY apps/agent/package.json ./apps/agent/package.json
+COPY apps/relay/package.json ./apps/relay/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/protocol/package.json ./packages/protocol/package.json
+RUN npm ci
+
+COPY apps/relay ./apps/relay
+COPY packages/protocol ./packages/protocol
+RUN npm run build --workspace=@steerloop/relay
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production \
+    STEERLOOP_RELAY_HOST=0.0.0.0 \
+    STEERLOOP_RELAY_PORT=8787 \
+    STEERLOOP_JOURNAL_PATH=/data/relay-events.jsonl
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps/agent/package.json ./apps/agent/package.json
+COPY apps/relay/package.json ./apps/relay/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/protocol/package.json ./packages/protocol/package.json
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force \
+    && mkdir -p /data && chown node:node /data
+
+COPY --from=build --chown=node:node /app/apps/relay/dist ./apps/relay/dist
+
+USER node
+EXPOSE 8787
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e 'fetch("http://127.0.0.1:8787/healthz").then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))'
+CMD ["node", "apps/relay/dist/index.js"]
