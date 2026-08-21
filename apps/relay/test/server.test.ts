@@ -3,6 +3,9 @@ import {
   type CommandEnvelope,
   type EventEnvelope,
 } from "@steerloop/protocol";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { createRelayServer, type RelayServer } from "../src/server.js";
@@ -184,5 +187,71 @@ describe("relay", () => {
       new Promise<false>((resolve) => setTimeout(() => resolve(false), 50)),
     ]);
     expect(forwarded).toBe(false);
+  });
+
+  it("restores the event snapshot after a relay restart", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "steerloop-relay-restart-"));
+    const journalPath = join(directory, "events.jsonl");
+    const config = {
+      host: "127.0.0.1",
+      port: 0,
+      token: TOKEN,
+      authTimeoutMs: 1_000,
+      maxHistory: 50,
+      maxPayloadBytes: 64 * 1_024,
+      journalPath,
+      journalSync: true,
+    };
+    const firstRelay = createRelayServer(config);
+    openServers.push(firstRelay);
+    const firstPort = await firstRelay.start();
+    const client = await connect(firstPort);
+    await authenticateClient(client);
+    const agent = await connect(firstPort);
+    await authenticateAgent(agent);
+    const persistedEvent: EventEnvelope = {
+      kind: "event",
+      protocolVersion: PROTOCOL_VERSION,
+      eventId: "persisted-event",
+      sequence: 1,
+      hostId: "host-1",
+      emittedAt: new Date().toISOString(),
+      event: {
+        type: "host.connected",
+        payload: {
+          name: "Persistent host",
+          platform: "linux",
+          agentVersion: "0.1.0",
+          capabilities: [],
+        },
+      },
+    };
+    const forwarded = nextFrame(client);
+    agent.send(JSON.stringify(persistedEvent));
+    await expect(forwarded).resolves.toEqual(persistedEvent);
+
+    client.terminate();
+    agent.terminate();
+    await firstRelay.stop();
+    openServers.splice(openServers.indexOf(firstRelay), 1);
+
+    const secondRelay = createRelayServer(config);
+    openServers.push(secondRelay);
+    const secondPort = await secondRelay.start();
+    const restoredClient = await connect(secondPort);
+    const frames = nextFrames(restoredClient, 2);
+    restoredClient.send(
+      JSON.stringify({
+        kind: "auth",
+        protocolVersion: PROTOCOL_VERSION,
+        role: "client",
+        token: TOKEN,
+      }),
+    );
+    const [, snapshot] = await frames;
+    expect(snapshot).toMatchObject({
+      kind: "snapshot",
+      events: [{ eventId: "persisted-event" }],
+    });
   });
 });

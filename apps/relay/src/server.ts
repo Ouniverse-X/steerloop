@@ -12,6 +12,7 @@ import {
 } from "@steerloop/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import type { RelayConfig } from "./config.js";
+import { EventJournal } from "./event-journal.js";
 
 interface UnauthenticatedPeer {
   authenticated: false;
@@ -93,6 +94,8 @@ export function createRelayServer(config: RelayConfig): RelayServer {
   const agents = new Map<string, WebSocket>();
   const clients = new Set<WebSocket>();
   let history: EventEnvelope[] = [];
+  let journal: EventJournal | undefined;
+  let agentFrameQueue: Promise<void> = Promise.resolve();
 
   function broadcastToClients(frame: unknown): void {
     for (const client of clients) send(client, frame);
@@ -145,11 +148,11 @@ export function createRelayServer(config: RelayConfig): RelayServer {
     }
   }
 
-  function handleAgentFrame(
+  async function handleAgentFrame(
     socket: WebSocket,
     peer: AgentPeer,
     value: unknown,
-  ): void {
+  ): Promise<void> {
     const parsed = agentToRelayFrameSchema.safeParse(value);
     if (!parsed.success || parsed.data.kind === "auth") {
       socket.close(1008, "invalid agent frame");
@@ -162,7 +165,9 @@ export function createRelayServer(config: RelayConfig): RelayServer {
     }
 
     if (parsed.data.kind === "event") {
-      history = [...history, parsed.data].slice(-config.maxHistory);
+      history = journal === undefined
+        ? [...history, parsed.data].slice(-config.maxHistory)
+        : await journal.append(parsed.data);
     }
     broadcastToClients(parsed.data);
   }
@@ -230,7 +235,12 @@ export function createRelayServer(config: RelayConfig): RelayServer {
       }
 
       if (peer.role === "agent") {
-        handleAgentFrame(socket, peer, value);
+        agentFrameQueue = agentFrameQueue
+          .then(() => handleAgentFrame(socket, peer, value))
+          .catch((error) => {
+            console.error("[relay] failed to persist agent frame", error);
+            socket.close(1011, "relay persistence failure");
+          });
       } else {
         handleClientFrame(socket, value);
       }
@@ -250,6 +260,14 @@ export function createRelayServer(config: RelayConfig): RelayServer {
 
   return {
     async start() {
+      if (config.journalPath !== undefined) {
+        journal = await EventJournal.open({
+          path: config.journalPath,
+          maxEvents: config.maxHistory,
+          syncWrites: config.journalSync ?? true,
+        });
+        history = journal.snapshot();
+      }
       await new Promise<void>((resolve, rejectPromise) => {
         httpServer.once("error", rejectPromise);
         httpServer.listen(config.port, config.host, () => {
@@ -274,6 +292,9 @@ export function createRelayServer(config: RelayConfig): RelayServer {
           else rejectPromise(error);
         });
       });
+      await agentFrameQueue;
+      await journal?.close();
+      journal = undefined;
     },
   };
 }

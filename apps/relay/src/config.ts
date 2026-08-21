@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 export interface RelayConfig {
   host: string;
   port: number;
@@ -5,6 +7,8 @@ export interface RelayConfig {
   authTimeoutMs: number;
   maxHistory: number;
   maxPayloadBytes: number;
+  journalPath?: string;
+  journalSync?: boolean;
 }
 
 const DEVELOPMENT_TOKEN = "steerloop-local-dev";
@@ -22,15 +26,42 @@ function parsePositiveInteger(
   return parsed;
 }
 
+function parseBoolean(
+  value: string | undefined,
+  fallback: boolean,
+  name: string,
+): boolean {
+  if (value === undefined) return fallback;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  throw new Error(`${name} must be true, false, 1, or 0`);
+}
+
 export function loadRelayConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): RelayConfig {
   const production = environment.NODE_ENV === "production";
-  const configuredToken = environment.STEERLOOP_TOKEN;
+  if (
+    environment.STEERLOOP_TOKEN !== undefined &&
+    environment.STEERLOOP_TOKEN_FILE !== undefined
+  ) {
+    throw new Error("Set only one of STEERLOOP_TOKEN and STEERLOOP_TOKEN_FILE");
+  }
+  const configuredToken = environment.STEERLOOP_TOKEN_FILE === undefined
+    ? environment.STEERLOOP_TOKEN
+    : readFileSync(environment.STEERLOOP_TOKEN_FILE, "utf8").trim();
   if (production && configuredToken === undefined) {
-    throw new Error("STEERLOOP_TOKEN is required in production");
+    throw new Error("STEERLOOP_TOKEN or STEERLOOP_TOKEN_FILE is required in production");
+  }
+  if (configuredToken !== undefined && configuredToken.length === 0) {
+    throw new Error("Steerloop token must not be empty");
+  }
+  if (production && (configuredToken?.length ?? 0) < 32) {
+    throw new Error("Production Steerloop tokens must contain at least 32 characters");
   }
 
+  const journalPath = environment.STEERLOOP_JOURNAL_PATH ??
+    "steerloop-data/relay-events.jsonl";
   return {
     host: environment.STEERLOOP_RELAY_HOST ?? "127.0.0.1",
     port: parsePositiveInteger(
@@ -53,6 +84,12 @@ export function loadRelayConfig(
       environment.STEERLOOP_MAX_PAYLOAD_BYTES,
       512 * 1_024,
       "STEERLOOP_MAX_PAYLOAD_BYTES",
+    ),
+    ...(journalPath === "off" ? {} : { journalPath }),
+    journalSync: parseBoolean(
+      environment.STEERLOOP_JOURNAL_SYNC,
+      true,
+      "STEERLOOP_JOURNAL_SYNC",
     ),
   };
 }
