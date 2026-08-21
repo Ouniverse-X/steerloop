@@ -18,10 +18,13 @@ export interface JsonRpcServerMessage {
 interface PendingRequest {
   resolve(value: unknown): void;
   reject(error: Error): void;
+  timeout: NodeJS.Timeout;
 }
 
 export interface CodexAppServerClientOptions {
   command?: string;
+  args?: string[];
+  requestTimeoutMs?: number;
   onNotification?(message: JsonRpcServerMessage): void;
   onServerRequest?(message: JsonRpcServerMessage & { id: RequestId }): void;
   onStderr?(line: string): void;
@@ -31,6 +34,7 @@ export class CodexAppServerClient {
   private child: ChildProcessWithoutNullStreams | undefined;
   private nextRequestId = 1;
   private readonly pending = new Map<RequestId, PendingRequest>();
+  private initializationResult: unknown;
 
   constructor(private readonly options: CodexAppServerClientOptions = {}) {}
 
@@ -38,7 +42,7 @@ export class CodexAppServerClient {
     if (this.child !== undefined) return;
     const child = spawn(
       this.options.command ?? "codex",
-      ["app-server", "--listen", "stdio://"],
+      this.options.args ?? ["app-server", "--listen", "stdio://"],
       { env: process.env, stdio: ["pipe", "pipe", "pipe"] },
     );
     this.child = child;
@@ -51,15 +55,21 @@ export class CodexAppServerClient {
     child.once("exit", (code, signal) => {
       this.child = undefined;
       const reason = `Codex App Server exited (${code ?? signal ?? "unknown"})`;
-      for (const request of this.pending.values()) request.reject(new Error(reason));
+      for (const request of this.pending.values()) {
+        clearTimeout(request.timeout);
+        request.reject(new Error(reason));
+      }
       this.pending.clear();
     });
     child.once("error", (error) => {
-      for (const request of this.pending.values()) request.reject(error);
+      for (const request of this.pending.values()) {
+        clearTimeout(request.timeout);
+        request.reject(error);
+      }
       this.pending.clear();
     });
 
-    await this.request("initialize", {
+    this.initializationResult = await this.request("initialize", {
       clientInfo: {
         name: "steerloop-agent",
         title: "Steerloop Agent",
@@ -73,9 +83,14 @@ export class CodexAppServerClient {
     this.notify("initialized", {});
   }
 
+  get serverInfo(): unknown {
+    return this.initializationResult;
+  }
+
   async stop(): Promise<void> {
     const child = this.child;
     this.child = undefined;
+    this.initializationResult = undefined;
     if (child === undefined) return;
     child.stdin.end();
     child.kill("SIGTERM");
@@ -91,11 +106,17 @@ export class CodexAppServerClient {
   request(method: string, params: unknown): Promise<unknown> {
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Codex request timed out: ${method}`));
+      }, this.options.requestTimeoutMs ?? 10_000);
+      timeout.unref();
+      this.pending.set(id, { resolve, reject, timeout });
       try {
         this.write({ method, id, params });
       } catch (error) {
         this.pending.delete(id);
+        clearTimeout(timeout);
         reject(error instanceof Error ? error : new Error("Codex request failed"));
       }
     });
@@ -135,6 +156,7 @@ export class CodexAppServerClient {
       const pending = this.pending.get(response.id);
       if (pending === undefined) return;
       this.pending.delete(response.id);
+      clearTimeout(pending.timeout);
       if (response.error !== undefined) {
         pending.reject(new Error(response.error.message ?? "Codex request failed"));
       } else {

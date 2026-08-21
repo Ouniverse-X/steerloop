@@ -4,7 +4,8 @@ import { loadAgentConfig } from "./config.js";
 import { DemoAdapter } from "./demo-adapter.js";
 
 const config = loadAgentConfig();
-const adapter = config.adapter === "codex" ? new CodexAdapter() : new DemoAdapter();
+const adapter =
+  config.adapter === "codex" ? new CodexAdapter(config.codexCommand) : new DemoAdapter();
 const controller = new AgentController(config, adapter);
 
 await controller.start();

@@ -1,0 +1,33 @@
+name: Codex compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  app-server-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Steerloop dependencies
+        run: npm ci
+
+      - name: Install pinned Codex CLI
+        run: npm install --global @openai/codex@0.147.0
+
+      - name: Probe App Server compatibility
+        run: npm run compat:codex

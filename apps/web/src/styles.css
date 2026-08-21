@@ -277,6 +277,7 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
 .approval-details dt { color: var(--faint); text-transform: uppercase; letter-spacing: .08em; }
 .approval-details dd { border-left: 1px solid var(--line); color: #cdd7d2; }
 .approval-details code { color: var(--mint); }
+.permission-list { display: grid; gap: 5px; margin: 0; padding-left: 17px; }
 .digest { margin: 0 0 0 53px; color: var(--faint); font-family: monospace; font-size: 9px; }
 .digest.integrity-valid { color: #73cda6; }
 .digest.integrity-invalid, .digest.integrity-unavailable { color: var(--coral); font-weight: 650; }

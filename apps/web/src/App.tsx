@@ -136,6 +136,18 @@ function ApprovalCard({ approval, integrity, now, onResolve }: ApprovalCardProps
         {approval.networkHost !== undefined && (
           <div><dt>Destination</dt><dd>{approval.networkProtocol ?? "network"}://{approval.networkHost}</dd></div>
         )}
+        {approval.requestedPermissions !== undefined && (
+          <div>
+            <dt>Permissions</dt>
+            <dd>
+              <ul className="permission-list">
+                {approval.requestedPermissions.map((permission) => (
+                  <li key={permission}>{permission}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
       </dl>
       <p className={`digest integrity-${integrity}`} title={approval.requestDigest}>
         {integrity === "valid"

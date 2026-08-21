@@ -81,6 +81,7 @@ describe("local approval round trip", () => {
         hostName: "Round Trip Host",
         platform: "test",
         adapter: "demo",
+        codexCommand: "codex",
         heartbeatMs: 60_000,
         reconnectMinMs: 20,
         reconnectMaxMs: 100,

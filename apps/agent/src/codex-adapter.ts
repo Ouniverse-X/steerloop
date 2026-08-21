@@ -19,7 +19,8 @@ interface PendingCodexApproval {
   digest: string;
   expiresAt: number;
   requestId: RequestId;
-  kind: "command" | "file_change";
+  kind: "command" | "file_change" | "permissions";
+  requestedPermissions?: Record<string, unknown>;
   sessionId: string;
 }
 
@@ -57,6 +58,48 @@ function mapThreadStatus(status: unknown): SessionStatus {
 function approvalDecision(decision: ApprovalDecision): "accept" | "decline" | "cancel" {
   if (decision === "approve_once") return "accept";
   return decision;
+}
+
+function displayPath(value: unknown): string {
+  if (typeof value === "string") return value;
+  const path = asRecord(value);
+  if (typeof path.path === "string") return path.path;
+  if (typeof path.pattern === "string") return path.pattern;
+  if (typeof path.value === "string") return path.value;
+  return JSON.stringify(value).slice(0, 900);
+}
+
+export function summarizeRequestedPermissions(value: unknown): string[] {
+  const permissions = asRecord(value);
+  const summary: string[] = [];
+  const network = asRecord(permissions.network);
+  if (network.enabled === true) summary.push("Enable network access");
+
+  const fileSystem = asRecord(permissions.fileSystem);
+  for (const access of ["read", "write"] as const) {
+    const paths = fileSystem[access];
+    if (Array.isArray(paths)) {
+      for (const path of paths) summary.push(`${access}: ${displayPath(path)}`);
+    }
+  }
+  if (Array.isArray(fileSystem.entries)) {
+    for (const entryValue of fileSystem.entries) {
+      const entry = asRecord(entryValue);
+      summary.push(`${String(entry.access ?? "access")}: ${displayPath(entry.path)}`);
+    }
+  }
+  return summary.slice(0, 128).map((item) => item.slice(0, 1_024));
+}
+
+function grantedPermissions(value: Record<string, unknown>): Record<string, unknown> {
+  const granted: Record<string, unknown> = {};
+  if (typeof value.network === "object" && value.network !== null) {
+    granted.network = value.network;
+  }
+  if (typeof value.fileSystem === "object" && value.fileSystem !== null) {
+    granted.fileSystem = value.fileSystem;
+  }
+  return granted;
 }
 
 export class CodexAdapter implements AgentAdapter {
@@ -197,9 +240,19 @@ export class CodexAdapter implements AgentAdapter {
     }
 
     this.pendingApprovals.delete(pending.approvalId);
-    this.client.respond(pending.requestId, {
-      decision: approvalDecision(payload.decision),
-    });
+    if (pending.kind === "permissions") {
+      this.client.respond(pending.requestId, {
+        permissions:
+          payload.decision === "approve_once" && pending.requestedPermissions !== undefined
+            ? grantedPermissions(pending.requestedPermissions)
+            : {},
+        scope: "turn",
+      });
+    } else {
+      this.client.respond(pending.requestId, {
+        decision: approvalDecision(payload.decision),
+      });
+    }
     this.emit(command.sessionId, {
       type: "approval.resolved",
       payload: {
@@ -216,7 +269,8 @@ export class CodexAdapter implements AgentAdapter {
     const params = asRecord(message.params);
     if (
       message.method !== "item/commandExecution/requestApproval" &&
-      message.method !== "item/fileChange/requestApproval"
+      message.method !== "item/fileChange/requestApproval" &&
+      message.method !== "item/permissions/requestApproval"
     ) {
       this.client.respondError(message.id, -32_601, "Unsupported remote request");
       return;
@@ -229,12 +283,15 @@ export class CodexAdapter implements AgentAdapter {
       return;
     }
 
-    const requestKind =
-      message.method === "item/commandExecution/requestApproval"
-        ? "command"
-        : "file_change";
+    const requestKind = message.method === "item/commandExecution/requestApproval"
+      ? "command"
+      : message.method === "item/fileChange/requestApproval"
+        ? "file_change"
+        : "permissions";
     const networkContext = asRecord(params.networkApprovalContext);
     const kind = optionalString(networkContext.host) === undefined ? requestKind : "network";
+    const rawPermissions = asRecord(params.permissions);
+    const requestedPermissions = summarizeRequestedPermissions(rawPermissions);
     const approvalId = `${sessionId}:${itemId}:${String(params.approvalId ?? message.id)}`;
     const material = canonicalizeApproval({
       approvalId,
@@ -255,6 +312,7 @@ export class CodexAdapter implements AgentAdapter {
       ...(optionalString(networkContext.protocol) === undefined
         ? {}
         : { networkProtocol: networkContext.protocol as string }),
+      ...(requestedPermissions.length === 0 ? {} : { requestedPermissions }),
     });
     const digest = createHash("sha256").update(material).digest("hex");
     const expiresAt = Date.now() + 5 * 60_000;
@@ -264,6 +322,9 @@ export class CodexAdapter implements AgentAdapter {
       expiresAt,
       requestId: message.id,
       kind: requestKind,
+      ...(requestKind === "permissions"
+        ? { requestedPermissions: rawPermissions }
+        : {}),
       sessionId,
     });
 
@@ -277,7 +338,9 @@ export class CodexAdapter implements AgentAdapter {
             ? `Allow network access to ${String(networkContext.host)}`
             : requestKind === "command"
               ? "Allow command execution"
-              : "Allow file changes",
+              : requestKind === "file_change"
+                ? "Allow file changes"
+                : "Grant additional permissions",
         ...(optionalString(params.reason) === undefined
           ? {}
           : { reason: params.reason as string }),
@@ -296,6 +359,7 @@ export class CodexAdapter implements AgentAdapter {
         ...(optionalString(networkContext.protocol) === undefined
           ? {}
           : { networkProtocol: networkContext.protocol as string }),
+        ...(requestedPermissions.length === 0 ? {} : { requestedPermissions }),
         requestDigest: digest,
         expiresAt: new Date(expiresAt).toISOString(),
       },

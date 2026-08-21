@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { hostname, platform } from "node:os";
 
 export type AdapterName = "demo" | "codex";
@@ -9,6 +10,7 @@ export interface AgentConfig {
   hostName: string;
   platform: string;
   adapter: AdapterName;
+  codexCommand: string;
   heartbeatMs: number;
   reconnectMinMs: number;
   reconnectMaxMs: number;
@@ -41,9 +43,23 @@ export function loadAgentConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AgentConfig {
   const production = environment.NODE_ENV === "production";
-  const token = environment.STEERLOOP_TOKEN;
+  if (
+    environment.STEERLOOP_TOKEN !== undefined &&
+    environment.STEERLOOP_TOKEN_FILE !== undefined
+  ) {
+    throw new Error("Set only one of STEERLOOP_TOKEN and STEERLOOP_TOKEN_FILE");
+  }
+  const token = environment.STEERLOOP_TOKEN_FILE === undefined
+    ? environment.STEERLOOP_TOKEN
+    : readFileSync(environment.STEERLOOP_TOKEN_FILE, "utf8").trim();
   if (production && token === undefined) {
-    throw new Error("STEERLOOP_TOKEN is required in production");
+    throw new Error("STEERLOOP_TOKEN or STEERLOOP_TOKEN_FILE is required in production");
+  }
+  if (token !== undefined && token.length === 0) {
+    throw new Error("Steerloop token must not be empty");
+  }
+  if (production && (token?.length ?? 0) < 32) {
+    throw new Error("Production Steerloop tokens must contain at least 32 characters");
   }
 
   return {
@@ -53,6 +69,7 @@ export function loadAgentConfig(
     hostName: environment.STEERLOOP_HOST_NAME ?? hostname(),
     platform: platform(),
     adapter: adapterName(environment.STEERLOOP_ADAPTER),
+    codexCommand: environment.STEERLOOP_CODEX_COMMAND ?? "codex",
     heartbeatMs: parsePositiveInteger(
       environment.STEERLOOP_HEARTBEAT_MS,
       15_000,
