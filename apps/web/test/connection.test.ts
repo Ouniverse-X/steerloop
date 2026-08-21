@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCommand, defaultRelayUrl } from "../src/connection.js";
+import { buildCommand, defaultRelayUrl, pairingUrl } from "../src/connection.js";
 
 describe("web command creation", () => {
   it("creates a short-lived, allowlisted command", () => {
@@ -31,5 +31,10 @@ describe("web command creation", () => {
     expect(defaultRelayUrl({ host: "127.0.0.1:5173", protocol: "http:" })).toBe(
       "ws://127.0.0.1:5173/ws",
     );
+  });
+
+  it("derives the pairing endpoint from the relay URL", () => {
+    expect(pairingUrl("wss://steerloop.example/ws")).toBe("https://steerloop.example/pair");
+    expect(pairingUrl("ws://127.0.0.1:5173/ws")).toBe("http://127.0.0.1:5173/pair");
   });
 });

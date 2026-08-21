@@ -1,5 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createServer, type IncomingMessage, type Server } from "node:http";
 import {
   PROTOCOL_VERSION,
   agentToRelayFrameSchema,
@@ -9,6 +9,7 @@ import {
   type AuthFrame,
   type CommandResult,
   type EventEnvelope,
+  type PairingOfferFrame,
 } from "@steerloop/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import type { RelayConfig } from "./config.js";
@@ -51,6 +52,28 @@ function send(socket: WebSocket, frame: unknown): void {
   }
 }
 
+function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 8_192) {
+        reject(new Error("request body too large"));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error("invalid JSON"));
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
 function commandError(
   commandId: string,
   hostId: string,
@@ -67,6 +90,36 @@ function commandError(
 }
 
 export function createRelayServer(config: RelayConfig): RelayServer {
+  const pairingOffers = new Map<string, PairingOfferFrame>();
+  const clientTokens = new Set<string>();
+
+  function clientTokenMatches(received: string): boolean {
+    if (tokenMatches(config.token, received)) return true;
+    for (const token of clientTokens) {
+      if (tokenMatches(token, received)) return true;
+    }
+    return false;
+  }
+
+  function issueClientToken(): string {
+    const token = `slc_${randomBytes(32).toString("hex")}`;
+    clientTokens.add(token);
+    return token;
+  }
+
+  function registerPairingOffer(offer: PairingOfferFrame): void {
+    for (const [code, existing] of pairingOffers) {
+      if (
+        existing.hostId === offer.hostId ||
+        Date.parse(existing.expiresAt) <= Date.now()
+      ) {
+        pairingOffers.delete(code);
+      }
+    }
+    pairingOffers.set(offer.code, offer);
+    console.log(`[relay] registered pairing code for host ${offer.hostId}`);
+  }
+
   const httpServer: Server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/healthz") {
       response.writeHead(200, { "content-type": "application/json" });
@@ -76,8 +129,44 @@ export function createRelayServer(config: RelayConfig): RelayServer {
           agents: agents.size,
           clients: clients.size,
           events: history.length,
+          pairings: pairingOffers.size,
+          devices: clientTokens.size,
         }),
       );
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/pair") {
+      void readJsonBody(request).then((value) => {
+        const record = typeof value === "object" && value !== null
+          ? value as Record<string, unknown>
+          : {};
+        const code = typeof record.code === "string"
+          ? record.code.trim().toUpperCase()
+          : "";
+        const offer = pairingOffers.get(code);
+        if (offer === undefined || Date.parse(offer.expiresAt) <= Date.now()) {
+          if (offer !== undefined) pairingOffers.delete(code);
+          response.writeHead(401, { "content-type": "application/json" });
+          response.end(JSON.stringify({ ok: false, error: "invalid_pairing_code" }));
+          return;
+        }
+        pairingOffers.delete(code);
+        const token = issueClientToken();
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          ok: true,
+          token,
+          hostId: offer.hostId,
+          expiresAt: offer.expiresAt,
+        }));
+      }).catch((error) => {
+        response.writeHead(400, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : "invalid_pairing_request",
+        }));
+      });
       return;
     }
 
@@ -112,7 +201,11 @@ export function createRelayServer(config: RelayConfig): RelayServer {
   }
 
   function authenticate(socket: WebSocket, auth: AuthFrame): void {
-    if (!tokenMatches(config.token, auth.token)) {
+    if (auth.role === "agent" && !tokenMatches(config.token, auth.token)) {
+      reject(socket, "Invalid credentials");
+      return;
+    }
+    if (auth.role === "client" && !clientTokenMatches(auth.token)) {
       reject(socket, "Invalid credentials");
       return;
     }
@@ -161,6 +254,11 @@ export function createRelayServer(config: RelayConfig): RelayServer {
 
     if (parsed.data.hostId !== peer.hostId) {
       socket.close(1008, "host identity mismatch");
+      return;
+    }
+
+    if (parsed.data.kind === "pairing.offer") {
+      registerPairingOffer(parsed.data);
       return;
     }
 

@@ -168,6 +168,14 @@ export const commandResultSchema = z.object({
   error: z.string().max(2048).optional(),
 });
 
+export const pairingOfferFrameSchema = z.object({
+  kind: z.literal("pairing.offer"),
+  protocolVersion: z.literal(PROTOCOL_VERSION),
+  hostId: idSchema,
+  code: z.string().min(6).max(32).regex(/^[A-Z0-9-]+$/),
+  expiresAt: timestampSchema,
+});
+
 export const authFrameSchema = z.discriminatedUnion("role", [
   z.object({
     kind: z.literal("auth"),
@@ -206,6 +214,7 @@ export const agentToRelayFrameSchema = z.union([
   authFrameSchema,
   eventEnvelopeSchema,
   commandResultSchema,
+  pairingOfferFrameSchema,
 ]);
 
 export const relayToClientFrameSchema = z.union([
@@ -228,6 +237,7 @@ export type EventEnvelope = z.infer<typeof eventEnvelopeSchema>;
 export type NormalizedCommand = z.infer<typeof normalizedCommandSchema>;
 export type CommandEnvelope = z.infer<typeof commandEnvelopeSchema>;
 export type CommandResult = z.infer<typeof commandResultSchema>;
+export type PairingOfferFrame = z.infer<typeof pairingOfferFrameSchema>;
 export type AuthFrame = z.infer<typeof authFrameSchema>;
 export type AuthResult = z.infer<typeof authResultSchema>;
 export type SnapshotFrame = z.infer<typeof snapshotFrameSchema>;

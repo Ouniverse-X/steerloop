@@ -33,6 +33,11 @@ forwards allowlisted commands to the intended host. Validated events are synced
 to a bounded JSONL journal before broadcast. Startup replays that journal and
 repairs only a crash-truncated final record; other corruption fails closed.
 
+During alpha pairing, an authenticated host registers a short-lived pairing
+code. A browser submits that code to Relay over `/pair`; Relay returns a
+browser-local client token that is accepted for client WebSocket authentication.
+The shared Relay token remains required for host connections.
+
 ### Web console
 
 The PWA reduces events into a local view of hosts, sessions, recent activity,
@@ -56,11 +61,13 @@ displayed security-sensitive fields and compares it with the host-bound digest.
               └───────────────┘
 ```
 
-During the initial milestone, the relay and clients share a bearer token. The
-roadmap replaces this with device identities, end-to-end encryption, and signed
-approval decisions. Host-side and browser-side digest checks are present from
-the beginning, so a relay cannot substitute or misrepresent a different pending
-request without the decision being blocked.
+During the current alpha, hosts still authenticate with a shared bearer token,
+while browsers can either use that token directly or pair through a short-lived
+host code. The roadmap replaces browser-local tokens with durable device
+identities, end-to-end encryption, and signed approval decisions. Host-side and
+browser-side digest checks are present from the beginning, so a relay cannot
+substitute or misrepresent a different pending request without the decision
+being blocked.
 
 ## Remote edge
 

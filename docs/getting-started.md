@@ -25,6 +25,11 @@ expiration, and verified request digest are visible before a decision is sent.
 The development stack uses `steerloop-local-dev`. That token is intentionally
 unsafe outside localhost.
 
+The Agent also prints a short pairing code such as `ABCD-1234`. In the web
+console, open **Connection**, enter the code, and choose **Pair device**. Relay
+exchanges the code for a browser-local client token, so the shared Relay token
+does not need to be copied into every browser.
+
 ## Connect local Codex
 
 Install and authenticate the Codex CLI first, then start the stack with:
@@ -52,8 +57,9 @@ npm run dev
 
 Open `http://<computer-lan-address>:5173` on the phone. Choose **Connect**, keep
 the automatically derived `ws://<computer-lan-address>:5173/ws` URL, and enter
-the generated token. Vite proxies `/ws` to the local Relay during development, so
-the browser does not need direct access to port 8787.
+the pairing code printed by the host Agent. Vite proxies `/ws` and `/pair` to the
+local Relay during development, so the browser does not need direct access to
+port 8787.
 
 Plain HTTP and WebSocket traffic is not safe on an untrusted network. Some
 mobile browsers also restrict installable PWA and Web Crypto capabilities on

@@ -155,6 +155,50 @@ describe("relay", () => {
     await expect(forwarded).resolves.toEqual(command);
   });
 
+  it("exchanges a host pairing code for a client token", async () => {
+    const port = await startRelay();
+    const agent = await connect(port);
+    await authenticateAgent(agent);
+    agent.send(JSON.stringify({
+      kind: "pairing.offer",
+      protocolVersion: PROTOCOL_VERSION,
+      hostId: "host-1",
+      code: "ABCD-1234",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }));
+
+    const response = await fetch(`http://127.0.0.1:${port}/pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "abcd-1234" }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ ok: true, hostId: "host-1" });
+    expect(String(body.token)).toMatch(/^slc_[a-f0-9]{64}$/);
+
+    const client = await connect(port);
+    const frames = nextFrames(client, 2);
+    client.send(
+      JSON.stringify({
+        kind: "auth",
+        protocolVersion: PROTOCOL_VERSION,
+        role: "client",
+        token: body.token,
+      }),
+    );
+    const [authResult, snapshot] = await frames;
+    expect(authResult).toMatchObject({ kind: "auth.result", ok: true });
+    expect(snapshot).toMatchObject({ kind: "snapshot", events: [] });
+
+    const replay = await fetch(`http://127.0.0.1:${port}/pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "ABCD-1234" }),
+    });
+    expect(replay.status).toBe(401);
+  });
+
   it("rejects an expired command without forwarding it", async () => {
     const port = await startRelay();
     const client = await connect(port);

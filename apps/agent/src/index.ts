@@ -12,6 +12,9 @@ await controller.start();
 console.log(
   `[agent] ${config.hostId} started with ${adapter.name} adapter; relay ${config.relayUrl}`,
 );
+console.log(
+  `[agent] pairing code ${config.pairingCode} expires at ${config.pairingExpiresAt}`,
+);
 
 async function shutdown(): Promise<void> {
   console.log("[agent] shutting down");

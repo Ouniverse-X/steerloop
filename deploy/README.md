@@ -12,7 +12,8 @@ Steerloop Agent over stdio.
 - no public access to Relay port 8787.
 
 Caddy obtains and renews the TLS certificate automatically. The browser uses the
-same origin for the PWA and `wss://<domain>/ws`, avoiding a second exposed port.
+same origin for the PWA, `wss://<domain>/ws`, and `https://<domain>/pair`,
+avoiding a second exposed port.
 
 ## Configure
 
@@ -26,8 +27,8 @@ cp deploy/.env.example deploy/.env
 ```
 
 Edit `deploy/.env` and set `STEERLOOP_DOMAIN` to the DNS name. The token file and
-`.env` are ignored by Git. Keep a secure copy of the token for the host Agent and
-the phone; do not send it through the deployed Steerloop site.
+`.env` are ignored by Git. Keep a secure copy of the token for host Agents; do
+not paste the shared Relay token into browser clients when pairing is available.
 
 Validate and start the stack:
 
@@ -63,7 +64,9 @@ npm run start --workspace=@steerloop/agent
 ```
 
 Open `https://<domain>` on the phone, choose **Connect**, and enter the same
-token. The default Relay URL is the same-origin `wss://<domain>/ws` endpoint.
+pairing code printed by the host Agent. Relay exchanges it for a browser-local
+client token. The default Relay URL is the same-origin `wss://<domain>/ws`
+endpoint.
 
 ## Persistence and backups
 
@@ -96,7 +99,8 @@ validated during startup.
 - Use a dedicated high-entropy token with at least 32 characters.
 - Expose only ports 80 and 443; port 8787 is an internal Compose port.
 - Never expose Codex App Server. Its direct WebSocket transport is not used.
-- The PWA is publicly downloadable, but events and commands require the Relay
-  token during the WebSocket handshake.
-- The current alpha does not provide per-device identities, token rotation, or
-  end-to-end encrypted Relay storage. These remain required before team use.
+- The PWA is publicly downloadable, but events and commands require either the
+  shared Relay token or a browser token issued through `/pair`.
+- Pairing tokens are in-memory alpha credentials. Durable per-device identities,
+  token rotation, revocation, and end-to-end encrypted Relay storage remain
+  required before team use.

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { hostname, platform } from "node:os";
+import { randomBytes } from "node:crypto";
 
 export type AdapterName = "demo" | "codex";
 
@@ -14,6 +15,8 @@ export interface AgentConfig {
   heartbeatMs: number;
   reconnectMinMs: number;
   reconnectMaxMs: number;
+  pairingCode: string;
+  pairingExpiresAt: string;
 }
 
 const DEVELOPMENT_TOKEN = "steerloop-local-dev";
@@ -39,6 +42,13 @@ function adapterName(value: string | undefined): AdapterName {
   return candidate;
 }
 
+function pairingCode(value: string | undefined): string {
+  if (value !== undefined && value.trim().length > 0) {
+    return value.trim().toUpperCase();
+  }
+  return randomBytes(4).toString("hex").toUpperCase().replace(/^(.{4})(.{4})$/, "$1-$2");
+}
+
 export function loadAgentConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AgentConfig {
@@ -61,6 +71,11 @@ export function loadAgentConfig(
   if (production && (token?.length ?? 0) < 32) {
     throw new Error("Production Steerloop tokens must contain at least 32 characters");
   }
+  const pairingTtlMs = parsePositiveInteger(
+    environment.STEERLOOP_PAIRING_TTL_MS,
+    10 * 60_000,
+    "STEERLOOP_PAIRING_TTL_MS",
+  );
 
   return {
     relayUrl: environment.STEERLOOP_RELAY_URL ?? "ws://127.0.0.1:8787/ws",
@@ -85,5 +100,7 @@ export function loadAgentConfig(
       30_000,
       "STEERLOOP_RECONNECT_MAX_MS",
     ),
+    pairingCode: pairingCode(environment.STEERLOOP_PAIRING_CODE),
+    pairingExpiresAt: new Date(Date.now() + pairingTtlMs).toISOString(),
   };
 }

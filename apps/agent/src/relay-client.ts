@@ -4,6 +4,7 @@ import {
   type CommandEnvelope,
   type CommandResult,
   type EventEnvelope,
+  type PairingOfferFrame,
 } from "@steerloop/protocol";
 import { WebSocket } from "ws";
 
@@ -13,10 +14,12 @@ interface RelayClientOptions {
   hostId: string;
   reconnectMinMs: number;
   reconnectMaxMs: number;
+  onAuthenticated?(): void;
   onCommand(command: CommandEnvelope): Promise<void>;
 }
 
 type OutboundFrame = EventEnvelope | CommandResult;
+type AuthenticatedFrame = OutboundFrame | PairingOfferFrame;
 
 const MAX_QUEUE = 1_000;
 
@@ -26,7 +29,7 @@ export class RelayClient {
   private stopped = false;
   private reconnectDelayMs: number;
   private reconnectTimer: NodeJS.Timeout | undefined;
-  private queue: OutboundFrame[] = [];
+  private queue: AuthenticatedFrame[] = [];
 
   constructor(private readonly options: RelayClientOptions) {
     this.reconnectDelayMs = options.reconnectMinMs;
@@ -58,7 +61,7 @@ export class RelayClient {
     });
   }
 
-  publish(frame: OutboundFrame): void {
+  publish(frame: AuthenticatedFrame): void {
     if (this.socket?.readyState === WebSocket.OPEN && this.authenticated) {
       this.socket.send(JSON.stringify(frame));
       return;
@@ -116,6 +119,7 @@ export class RelayClient {
           this.authenticated = true;
           this.reconnectDelayMs = this.options.reconnectMinMs;
           this.flushQueue();
+          this.options.onAuthenticated?.();
           resolve();
           return;
         }

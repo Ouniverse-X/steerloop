@@ -12,6 +12,7 @@ import {
   buildCommand,
   ControlClient,
   defaultRelayUrl,
+  pairWithRelay,
   type ConnectionUpdate,
 } from "./connection.js";
 import {
@@ -440,6 +441,8 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [pairingCode, setPairingCode] = useState("");
+  const [pairingBusy, setPairingBusy] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [approvalIntegrity, setApprovalIntegrity] = useState<Record<string, ApprovalIntegrity>>({});
   const [now, setNow] = useState(Date.now());
@@ -555,6 +558,28 @@ export function App() {
     setSettingsOpen(false);
   }
 
+  async function pairDevice(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const code = pairingCode.trim();
+    if (code.length === 0) return;
+    setPairingBusy(true);
+    try {
+      const result = await pairWithRelay(draftSettings.url.trim(), code);
+      const next = { url: draftSettings.url.trim(), token: result.token ?? "" };
+      localStorage.setItem("steerloop.relayUrl", next.url);
+      localStorage.setItem("steerloop.token", next.token);
+      setDraftSettings(next);
+      setSettings(next);
+      setPairingCode("");
+      setSettingsOpen(false);
+      setNotice(`Paired with ${result.hostId ?? "host"}`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Pairing failed");
+    } finally {
+      setPairingBusy(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -656,7 +681,13 @@ export function App() {
             <button className="dialog-close" type="button" onClick={() => setSettingsOpen(false)} aria-label="Close">×</button>
             <p className="eyebrow">Connection</p>
             <h2 id="settings-title">Relay settings</h2>
-            <p>Credentials stay in this browser. Use TLS and a unique token outside local development.</p>
+            <p>Pair this browser with a host code, or enter an existing Relay token.</p>
+            <form className="pairing-form" onSubmit={(event) => void pairDevice(event)}>
+              <label>Pairing code<input inputMode="text" autoComplete="one-time-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value.toUpperCase())} placeholder="ABCD-1234" /></label>
+              <button className="button button-primary" type="submit" disabled={pairingBusy || pairingCode.trim().length === 0}>
+                {pairingBusy ? "Pairing..." : "Pair device"}
+              </button>
+            </form>
             <form onSubmit={saveSettings}>
               <label>WebSocket URL<input type="url" required value={draftSettings.url} onChange={(event) => setDraftSettings({ ...draftSettings, url: event.target.value })} /></label>
               <label>Access token<input type="password" required value={draftSettings.token} onChange={(event) => setDraftSettings({ ...draftSettings, token: event.target.value })} /></label>

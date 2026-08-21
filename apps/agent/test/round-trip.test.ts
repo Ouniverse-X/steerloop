@@ -85,6 +85,8 @@ describe("local approval round trip", () => {
         heartbeatMs: 60_000,
         reconnectMinMs: 20,
         reconnectMaxMs: 100,
+        pairingCode: "TEST-PAIR",
+        pairingExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
       new DemoAdapter({ approvalDelayMs: 5, completionDelayMs: 5 }),
     );

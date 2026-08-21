@@ -20,6 +20,7 @@ export class AgentController {
       hostId: config.hostId,
       reconnectMinMs: config.reconnectMinMs,
       reconnectMaxMs: config.reconnectMaxMs,
+      onAuthenticated: () => this.registerPairingCode(),
       onCommand: (command) => this.handleCommand(command),
     });
   }
@@ -68,5 +69,18 @@ export class AgentController {
 
   private async handleCommand(command: CommandEnvelope): Promise<void> {
     await this.adapter.handleCommand(command);
+  }
+
+  private registerPairingCode(): void {
+    console.log(
+      `[agent] registered pairing code ${this.config.pairingCode} with relay`,
+    );
+    this.relay.publish({
+      kind: "pairing.offer",
+      protocolVersion: PROTOCOL_VERSION,
+      hostId: this.config.hostId,
+      code: this.config.pairingCode,
+      expiresAt: this.config.pairingExpiresAt,
+    });
   }
 }

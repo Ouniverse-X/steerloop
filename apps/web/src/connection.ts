@@ -34,6 +34,14 @@ interface ConnectionTarget {
   token: string;
 }
 
+interface PairingResponse {
+  ok: boolean;
+  token?: string;
+  hostId?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
 const RECONNECT_MIN_MS = 750;
 const RECONNECT_MAX_MS = 10_000;
 
@@ -68,6 +76,28 @@ export function defaultRelayUrl(
 ): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${location.host}/ws`;
+}
+
+export function pairingUrl(relayUrl: string): string {
+  const url = new URL(relayUrl);
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  url.pathname = "/pair";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+export async function pairWithRelay(relayUrl: string, code: string): Promise<PairingResponse> {
+  const response = await fetch(pairingUrl(relayUrl), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const body = await response.json() as PairingResponse;
+  if (!response.ok || !body.ok || body.token === undefined) {
+    throw new Error(body.error ?? "Pairing failed");
+  }
+  return body;
 }
 
 export class ControlClient {
