@@ -64,11 +64,10 @@ export function buildCommand(
 }
 
 export function defaultRelayUrl(
-  location: Pick<Location, "host" | "hostname" | "protocol">,
+  location: Pick<Location, "host" | "protocol">,
 ): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  if (location.protocol === "https:") return `${protocol}//${location.host}/ws`;
-  return `${protocol}//${location.hostname || "127.0.0.1"}:8787/ws`;
+  return `${protocol}//${location.host}/ws`;
 }
 
 export class ControlClient {

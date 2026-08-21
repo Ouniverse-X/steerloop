@@ -45,9 +45,28 @@ interface Settings {
   token: string;
 }
 
+function storedRelayUrl(location: Location): string {
+  const fallback = defaultRelayUrl(location);
+  const stored = localStorage.getItem("steerloop.relayUrl");
+  if (stored === null) return fallback;
+
+  try {
+    const parsed = new URL(stored);
+    const pagePort = location.port;
+    const legacyLocalDefault =
+      parsed.pathname === "/ws" &&
+      parsed.hostname === location.hostname &&
+      parsed.port === "8787" &&
+      pagePort.length > 0;
+    return legacyLocalDefault ? fallback : stored;
+  } catch {
+    return fallback;
+  }
+}
+
 function loadSettings(): Settings {
   return {
-    url: localStorage.getItem("steerloop.relayUrl") ?? defaultRelayUrl(window.location),
+    url: storedRelayUrl(window.location),
     token: localStorage.getItem("steerloop.token") ?? DEVELOPMENT_TOKEN,
   };
 }

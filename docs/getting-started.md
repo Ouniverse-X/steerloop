@@ -40,8 +40,8 @@ bound to a network interface by Steerloop.
 ## Test from a phone on a trusted LAN
 
 This mode is for temporary development on a private network, not the public
-internet. Generate a token, bind the Relay and Vite to the LAN, and allow ports
-5173 and 8787 only from that network:
+internet. Generate a token, bind the Relay and Vite to the LAN, and allow the
+Vite port only from that network:
 
 ```bash
 export STEERLOOP_TOKEN="$(openssl rand -hex 32)"
@@ -51,8 +51,9 @@ npm run dev
 ```
 
 Open `http://<computer-lan-address>:5173` on the phone. Choose **Connect**, keep
-the automatically derived `ws://<computer-lan-address>:8787/ws` URL, and enter
-the generated token.
+the automatically derived `ws://<computer-lan-address>:5173/ws` URL, and enter
+the generated token. Vite proxies `/ws` to the local Relay during development, so
+the browser does not need direct access to port 8787.
 
 Plain HTTP and WebSocket traffic is not safe on an untrusted network. Some
 mobile browsers also restrict installable PWA and Web Crypto capabilities on

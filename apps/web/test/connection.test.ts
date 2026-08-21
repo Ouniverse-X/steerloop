@@ -22,8 +22,14 @@ describe("web command creation", () => {
   });
 
   it("uses secure WebSockets behind HTTPS", () => {
-    expect(defaultRelayUrl({ host: "steerloop.example", hostname: "steerloop.example", protocol: "https:" })).toBe(
+    expect(defaultRelayUrl({ host: "steerloop.example", protocol: "https:" })).toBe(
       "wss://steerloop.example/ws",
+    );
+  });
+
+  it("uses the page origin during local development", () => {
+    expect(defaultRelayUrl({ host: "127.0.0.1:5173", protocol: "http:" })).toBe(
+      "ws://127.0.0.1:5173/ws",
     );
   });
 });

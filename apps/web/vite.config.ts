@@ -6,6 +6,13 @@ export default defineConfig({
   server: {
     host: process.env.STEERLOOP_WEB_HOST ?? "127.0.0.1",
     port: 5173,
+    proxy: {
+      "/healthz": "http://127.0.0.1:8787",
+      "/ws": {
+        target: "ws://127.0.0.1:8787",
+        ws: true,
+      },
+    },
   },
   preview: {
     host: process.env.STEERLOOP_WEB_HOST ?? "127.0.0.1",
