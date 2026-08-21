@@ -53,6 +53,7 @@ through a deployed relay, including a 30-minute disconnect.
 
 ## Milestone 4 — Multi-agent control plane
 
+- [x] DeepSeek Harness Cordis plugin bridge MVP
 - [ ] Public provider-adapter interface
 - [ ] Read-only adapter capability level
 - [ ] Interactive adapter capability level

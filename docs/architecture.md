@@ -26,6 +26,12 @@ decisions.
 The Codex adapter uses the App Server's local stdio JSONL transport. Direct
 App Server WebSocket exposure is intentionally out of scope.
 
+The DeepSeek Harness integration is a Cordis plugin bridge. It connects to Relay
+as a host, listens to Harness `session/event` activity, and registers a Harness
+`approval/request` answerer that waits for Steerloop device-signed approvals.
+The bridge uses the stable public seams available in the Harness developer
+preview and avoids replacing Harness UI, storage, or scheduler components.
+
 ### Relay
 
 The relay authenticates connections, forwards events to subscribed clients, and

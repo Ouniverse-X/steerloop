@@ -13,10 +13,11 @@ run.
 ## Project status
 
 Steerloop is in an early private-alpha stage. The local end-to-end milestone now
-includes four parts:
+includes five parts:
 
 - a shared, provider-neutral event protocol;
 - a host agent with Codex App Server and demo adapters;
+- a DeepSeek Harness Cordis plugin bridge;
 - an outbound-only relay;
 - a mobile-first PWA control console.
 
@@ -26,14 +27,13 @@ control production systems.
 ## Architecture
 
 ```text
-Codex App Server ──stdio── Steerloop Agent
-                              │
-                              │ authenticated outbound WebSocket
-                              ▼
-                        Steerloop Relay
-                              │
-                              ▼
-                       Web / PWA Console
+Codex App Server ──stdio── Steerloop Agent ┐
+DeepSeek Harness ──plugin── @steerloop/dsh ├─ authenticated outbound WebSocket
+                                           ▼
+                                     Steerloop Relay
+                                           │
+                                           ▼
+                                    Web / PWA Console
 ```
 
 Codex remains responsible for its sandbox and approval policy. Steerloop adds a
@@ -42,6 +42,9 @@ transport and control surface; it does not bypass the host's security boundary.
 See [the getting-started guide](docs/getting-started.md),
 [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and
 [product proposal](docs/product-proposal.md) for details.
+
+For DeepSeek Harness, use the
+[Cordis plugin bridge](docs/deepseek-harness-plugin.md).
 
 For an internet-facing HTTPS/WSS test deployment, follow the
 [remote deployment guide](deploy/README.md).
@@ -98,6 +101,7 @@ apps/
   relay/       Authenticated event and command relay
   web/         Mobile-first PWA console
 packages/
+  dsh-plugin/  DeepSeek Harness Cordis plugin bridge
   protocol/    Shared events, commands, validation, and reducers
 docs/          Product, architecture, decisions, and roadmap
 ```
