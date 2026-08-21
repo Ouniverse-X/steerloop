@@ -12,6 +12,7 @@ services:
       STEERLOOP_RELAY_HOST: 0.0.0.0
       STEERLOOP_RELAY_PORT: 8787
       STEERLOOP_JOURNAL_PATH: /data/relay-events.jsonl
+      STEERLOOP_DEVICE_REGISTRY_PATH: /data/relay-devices.json
       STEERLOOP_JOURNAL_SYNC: "true"
       STEERLOOP_MAX_HISTORY: ${STEERLOOP_MAX_HISTORY:-2000}
     secrets:

@@ -12,8 +12,8 @@ Steerloop Agent over stdio.
 - no public access to Relay port 8787.
 
 Caddy obtains and renews the TLS certificate automatically. The browser uses the
-same origin for the PWA, `wss://<domain>/ws`, and `https://<domain>/pair`,
-avoiding a second exposed port.
+same origin for the PWA, `wss://<domain>/ws`, `https://<domain>/pair`, and
+`https://<domain>/devices`, avoiding a second exposed port.
 
 ## Configure
 
@@ -71,13 +71,17 @@ endpoint.
 ## Persistence and backups
 
 Relay events are stored in the `relay-data` volume as
-`/data/relay-events.jsonl`. Each accepted event is synced before broadcast, and
-the journal is atomically compacted to the configured history window.
+`/data/relay-events.jsonl`. Browser device identities are stored in the same
+volume as `/data/relay-devices.json`; only token hashes are written. Each
+accepted event is synced before broadcast, and the journal is atomically
+compacted to the configured history window.
 
 The journal contains session titles, activity summaries, commands, paths, and
-approval metadata. Protect Docker data at rest and include the `relay-data`
-volume in encrypted backups. Removing that volume permanently removes the Relay
-history; it does not delete Codex's local thread history on host machines.
+approval metadata. The device registry contains host IDs, device names, token
+hashes, and revocation timestamps. Protect Docker data at rest and include the
+`relay-data` volume in encrypted backups. Removing that volume permanently
+removes Relay history and paired browser devices; it does not delete Codex's
+local thread history on host machines.
 
 ## Update and rollback
 
@@ -101,6 +105,6 @@ validated during startup.
 - Never expose Codex App Server. Its direct WebSocket transport is not used.
 - The PWA is publicly downloadable, but events and commands require either the
   shared Relay token or a browser token issued through `/pair`.
-- Pairing tokens are in-memory alpha credentials. Durable per-device identities,
-  token rotation, revocation, and end-to-end encrypted Relay storage remain
-  required before team use.
+- Pairing creates durable browser device records that can be listed and revoked
+  from the Connection dialog. Device-bound approval signatures, token rotation,
+  and end-to-end encrypted Relay storage remain required before team use.

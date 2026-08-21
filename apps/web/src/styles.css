@@ -391,6 +391,17 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
 .settings-dialog input { display: block; height: 42px; margin-top: 7px; padding: 0 12px; font-family: monospace; font-size: 11px; }
 .settings-dialog .button { margin-top: 5px; }
 .connection-detail { margin: 14px 0 0; color: var(--coral); font-size: 11px; }
+.device-manager { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.device-manager-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.device-manager h3 { margin: 0; font-size: 15px; font-weight: 560; letter-spacing: -.02em; }
+.device-empty { margin: 12px 0 0; color: var(--faint); font-size: 11px; }
+.device-list { display: grid; gap: 8px; margin: 13px 0 0; padding: 0; list-style: none; }
+.device-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025); }
+.device-list li.revoked { opacity: .55; }
+.device-list span { min-width: 0; }
+.device-list strong, .device-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-list strong { font-size: 11px; font-weight: 560; }
+.device-list small { margin-top: 4px; color: var(--faint); font-size: 9px; }
 
 .toast { position: fixed; z-index: 50; right: 22px; bottom: max(22px, env(safe-area-inset-bottom)); max-width: min(360px, calc(100vw - 44px)); padding: 12px 16px; border: 1px solid rgba(158,245,207,.25); border-radius: 11px; background: #17231f; box-shadow: 0 15px 50px rgba(0,0,0,.4); color: #d5e4dc; font-size: 11px; animation: rise .2s ease-out; }
 
@@ -444,6 +455,8 @@ main { width: min(1500px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 80
   .timeline-line { display: block; }
   .timeline-line time { display: block; margin-top: 4px; }
   .pairing-form { grid-template-columns: 1fr; }
+  .device-manager-heading, .device-list li { align-items: stretch; flex-direction: column; }
+  .device-list strong, .device-list small { white-space: normal; overflow-wrap: anywhere; }
 }
 
 @media (prefers-reduced-motion: reduce) {

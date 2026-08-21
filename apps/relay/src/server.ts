@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import {
   PROTOCOL_VERSION,
@@ -13,6 +13,7 @@ import {
 } from "@steerloop/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import type { RelayConfig } from "./config.js";
+import { DeviceRegistry } from "./device-registry.js";
 import { EventJournal } from "./event-journal.js";
 
 interface UnauthenticatedPeer {
@@ -28,6 +29,7 @@ interface AgentPeer {
 interface ClientPeer {
   authenticated: true;
   role: "client";
+  deviceId?: string;
 }
 
 type Peer = UnauthenticatedPeer | AgentPeer | ClientPeer;
@@ -91,20 +93,19 @@ function commandError(
 
 export function createRelayServer(config: RelayConfig): RelayServer {
   const pairingOffers = new Map<string, PairingOfferFrame>();
-  const clientTokens = new Set<string>();
+  let deviceRegistry: DeviceRegistry | undefined;
 
-  function clientTokenMatches(received: string): boolean {
-    if (tokenMatches(config.token, received)) return true;
-    for (const token of clientTokens) {
-      if (tokenMatches(token, received)) return true;
-    }
-    return false;
+  function authenticateHttp(request: IncomingMessage): boolean {
+    const header = request.headers.authorization;
+    if (header === undefined || !header.startsWith("Bearer ")) return false;
+    const token = header.slice("Bearer ".length);
+    return tokenMatches(config.token, token) || deviceRegistry?.verify(token) !== undefined;
   }
 
-  function issueClientToken(): string {
-    const token = `slc_${randomBytes(32).toString("hex")}`;
-    clientTokens.add(token);
-    return token;
+  function clientDevice(received: string): { ok: true; deviceId?: string } | { ok: false } {
+    if (tokenMatches(config.token, received)) return { ok: true };
+    const device = deviceRegistry?.verify(received);
+    return device === undefined ? { ok: false } : { ok: true, deviceId: device.id };
   }
 
   function registerPairingOffer(offer: PairingOfferFrame): void {
@@ -120,7 +121,7 @@ export function createRelayServer(config: RelayConfig): RelayServer {
     console.log(`[relay] registered pairing code for host ${offer.hostId}`);
   }
 
-  const httpServer: Server = createServer((request, response) => {
+  const httpServer: Server = createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/healthz") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
@@ -130,14 +131,14 @@ export function createRelayServer(config: RelayConfig): RelayServer {
           clients: clients.size,
           events: history.length,
           pairings: pairingOffers.size,
-          devices: clientTokens.size,
+          devices: deviceRegistry?.list().filter((device) => device.revokedAt === undefined).length ?? 0,
         }),
       );
       return;
     }
 
     if (request.method === "POST" && request.url === "/pair") {
-      void readJsonBody(request).then((value) => {
+      void readJsonBody(request).then(async (value) => {
         const record = typeof value === "object" && value !== null
           ? value as Record<string, unknown>
           : {};
@@ -152,11 +153,22 @@ export function createRelayServer(config: RelayConfig): RelayServer {
           return;
         }
         pairingOffers.delete(code);
-        const token = issueClientToken();
+        const issued = await deviceRegistry?.issue(
+          offer.hostId,
+          typeof record.deviceName === "string" && record.deviceName.trim().length > 0
+            ? record.deviceName.trim().slice(0, 128)
+            : "Browser device",
+        );
+        if (issued === undefined) {
+          response.writeHead(503, { "content-type": "application/json" });
+          response.end(JSON.stringify({ ok: false, error: "device_registry_unavailable" }));
+          return;
+        }
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({
           ok: true,
-          token,
+          token: issued.token,
+          device: issued.device,
           hostId: offer.hostId,
           expiresAt: offer.expiresAt,
         }));
@@ -167,6 +179,44 @@ export function createRelayServer(config: RelayConfig): RelayServer {
           error: error instanceof Error ? error.message : "invalid_pairing_request",
         }));
       });
+      return;
+    }
+
+    if (request.method === "GET" && request.url === "/devices") {
+      if (!authenticateHttp(request)) {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: false, error: "unauthorized" }));
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        ok: true,
+        devices: deviceRegistry?.list() ?? [],
+      }));
+      return;
+    }
+
+    const deviceDeleteMatch = request.url?.match(/^\/devices\/([^/]+)$/);
+    if (request.method === "DELETE" && deviceDeleteMatch !== undefined && deviceDeleteMatch !== null) {
+      const deviceId = deviceDeleteMatch[1];
+      if (deviceId === undefined) {
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: false, error: "device_not_found" }));
+        return;
+      }
+      if (!authenticateHttp(request)) {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: false, error: "unauthorized" }));
+        return;
+      }
+      const device = await deviceRegistry?.revoke(decodeURIComponent(deviceId));
+      if (device === undefined) {
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: false, error: "device_not_found" }));
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: true, device }));
       return;
     }
 
@@ -205,7 +255,8 @@ export function createRelayServer(config: RelayConfig): RelayServer {
       reject(socket, "Invalid credentials");
       return;
     }
-    if (auth.role === "client" && !clientTokenMatches(auth.token)) {
+    const clientAuth = auth.role === "client" ? clientDevice(auth.token) : undefined;
+    if (auth.role === "client" && clientAuth?.ok !== true) {
       reject(socket, "Invalid credentials");
       return;
     }
@@ -222,7 +273,12 @@ export function createRelayServer(config: RelayConfig): RelayServer {
       });
       agents.set(auth.hostId, socket);
     } else {
-      peers.set(socket, { authenticated: true, role: "client" });
+      const deviceId = clientAuth?.ok === true ? clientAuth.deviceId : undefined;
+      peers.set(socket, {
+        authenticated: true,
+        role: "client",
+        ...(deviceId === undefined ? {} : { deviceId }),
+      });
       clients.add(socket);
     }
 
@@ -366,6 +422,9 @@ export function createRelayServer(config: RelayConfig): RelayServer {
         });
         history = journal.snapshot();
       }
+      if (config.deviceRegistryPath !== undefined) {
+        deviceRegistry = await DeviceRegistry.open({ path: config.deviceRegistryPath });
+      }
       await new Promise<void>((resolve, rejectPromise) => {
         httpServer.once("error", rejectPromise);
         httpServer.listen(config.port, config.host, () => {
@@ -384,6 +443,8 @@ export function createRelayServer(config: RelayConfig): RelayServer {
         socket.close(1001, "relay shutting down");
       }
       await new Promise<void>((resolve) => webSocketServer.close(() => resolve()));
+      httpServer.closeIdleConnections();
+      httpServer.closeAllConnections();
       await new Promise<void>((resolve, rejectPromise) => {
         httpServer.close((error) => {
           if (error === undefined) resolve();
@@ -393,6 +454,7 @@ export function createRelayServer(config: RelayConfig): RelayServer {
       await agentFrameQueue;
       await journal?.close();
       journal = undefined;
+      deviceRegistry = undefined;
     },
   };
 }

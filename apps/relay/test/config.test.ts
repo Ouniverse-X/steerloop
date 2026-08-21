@@ -14,10 +14,12 @@ describe("relay production configuration", () => {
       NODE_ENV: "production",
       STEERLOOP_TOKEN_FILE: tokenPath,
       STEERLOOP_JOURNAL_PATH: "/data/events.jsonl",
+      STEERLOOP_DEVICE_REGISTRY_PATH: "/data/devices.json",
     });
 
     expect(config.token).toBe("0123456789abcdef0123456789abcdef");
     expect(config.journalPath).toBe("/data/events.jsonl");
+    expect(config.deviceRegistryPath).toBe("/data/devices.json");
   });
 
   it("rejects short production tokens", () => {
@@ -27,7 +29,11 @@ describe("relay production configuration", () => {
   });
 
   it("can explicitly disable persistence for disposable tests", () => {
-    const config = loadRelayConfig({ STEERLOOP_JOURNAL_PATH: "off" });
+    const config = loadRelayConfig({
+      STEERLOOP_JOURNAL_PATH: "off",
+      STEERLOOP_DEVICE_REGISTRY_PATH: "off",
+    });
     expect(config.journalPath).toBeUndefined();
+    expect(config.deviceRegistryPath).toBeUndefined();
   });
 });

@@ -20,6 +20,7 @@ afterEach(async () => {
 });
 
 async function startRelay(): Promise<number> {
+  const directory = await mkdtemp(join(tmpdir(), "steerloop-devices-"));
   const server = createRelayServer({
     host: "127.0.0.1",
     port: 0,
@@ -27,6 +28,7 @@ async function startRelay(): Promise<number> {
     authTimeoutMs: 1_000,
     maxHistory: 50,
     maxPayloadBytes: 64 * 1_024,
+    deviceRegistryPath: join(directory, "devices.json"),
   });
   openServers.push(server);
   return server.start();
@@ -70,6 +72,22 @@ function nextFrames(socket: WebSocket, count: number): Promise<unknown[]> {
 
 async function nextFrame(socket: WebSocket): Promise<unknown> {
   return (await nextFrames(socket, 1))[0];
+}
+
+async function pairDevice(port: number, code: string): Promise<Record<string, unknown>> {
+  let lastStatus = 0;
+  for (let index = 0; index < 20; index += 1) {
+    const response = await fetch(`http://127.0.0.1:${port}/pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    lastStatus = response.status;
+    const body = await response.json() as Record<string, unknown>;
+    if (response.status === 200) return body;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Pairing did not become available; last status ${lastStatus}`);
 }
 
 async function authenticateClient(socket: WebSocket): Promise<void> {
@@ -167,15 +185,10 @@ describe("relay", () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     }));
 
-    const response = await fetch(`http://127.0.0.1:${port}/pair`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code: "abcd-1234" }),
-    });
-    expect(response.status).toBe(200);
-    const body = await response.json() as Record<string, unknown>;
+    const body = await pairDevice(port, "abcd-1234");
     expect(body).toMatchObject({ ok: true, hostId: "host-1" });
     expect(String(body.token)).toMatch(/^slc_[a-f0-9]{64}$/);
+    expect(body.device).toMatchObject({ hostId: "host-1" });
 
     const client = await connect(port);
     const frames = nextFrames(client, 2);
@@ -191,12 +204,92 @@ describe("relay", () => {
     expect(authResult).toMatchObject({ kind: "auth.result", ok: true });
     expect(snapshot).toMatchObject({ kind: "snapshot", events: [] });
 
+    const listResponse = await fetch(`http://127.0.0.1:${port}/devices`, {
+      headers: { authorization: `Bearer ${String(body.token)}` },
+    });
+    expect(listResponse.status).toBe(200);
+    const listBody = await listResponse.json() as Record<string, unknown>;
+    const devices = listBody.devices as Array<Record<string, unknown>>;
+    expect(devices).toHaveLength(1);
+    const pairedDevice = devices[0];
+    if (pairedDevice === undefined) throw new Error("Expected a paired device");
+    expect(pairedDevice).not.toHaveProperty("tokenHash");
+
+    const revokeResponse = await fetch(`http://127.0.0.1:${port}/devices/${String(pairedDevice.id)}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${String(body.token)}` },
+    });
+    expect(revokeResponse.status).toBe(200);
+
     const replay = await fetch(`http://127.0.0.1:${port}/pair`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: "ABCD-1234" }),
     });
     expect(replay.status).toBe(401);
+
+    const revokedClient = await connect(port);
+    const revokedAuth = nextFrame(revokedClient);
+    revokedClient.send(
+      JSON.stringify({
+        kind: "auth",
+        protocolVersion: PROTOCOL_VERSION,
+        role: "client",
+        token: body.token,
+      }),
+    );
+    await expect(revokedAuth).resolves.toMatchObject({
+      kind: "auth.result",
+      ok: false,
+    });
+  });
+
+  it("keeps paired device tokens across relay restarts", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "steerloop-device-restart-"));
+    const config = {
+      host: "127.0.0.1",
+      port: 0,
+      token: TOKEN,
+      authTimeoutMs: 1_000,
+      maxHistory: 50,
+      maxPayloadBytes: 64 * 1_024,
+      deviceRegistryPath: join(directory, "devices.json"),
+    };
+    const firstRelay = createRelayServer(config);
+    openServers.push(firstRelay);
+    const firstPort = await firstRelay.start();
+    const agent = await connect(firstPort);
+    await authenticateAgent(agent);
+    agent.send(JSON.stringify({
+      kind: "pairing.offer",
+      protocolVersion: PROTOCOL_VERSION,
+      hostId: "host-1",
+      code: "KEEP-0001",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }));
+    const pairBody = await pairDevice(firstPort, "KEEP-0001");
+    const token = String(pairBody.token);
+
+    agent.terminate();
+    await firstRelay.stop();
+    openServers.splice(openServers.indexOf(firstRelay), 1);
+
+    const secondRelay = createRelayServer(config);
+    openServers.push(secondRelay);
+    const secondPort = await secondRelay.start();
+    const client = await connect(secondPort);
+    const frames = nextFrames(client, 2);
+    client.send(
+      JSON.stringify({
+        kind: "auth",
+        protocolVersion: PROTOCOL_VERSION,
+        role: "client",
+        token,
+      }),
+    );
+    const [authResult, snapshot] = await frames;
+    expect(authResult).toMatchObject({ kind: "auth.result", ok: true });
+    expect(snapshot).toMatchObject({ kind: "snapshot" });
   });
 
   it("rejects an expired command without forwarding it", async () => {
@@ -245,6 +338,7 @@ describe("relay", () => {
       maxPayloadBytes: 64 * 1_024,
       journalPath,
       journalSync: true,
+      deviceRegistryPath: join(directory, "devices.json"),
     };
     const firstRelay = createRelayServer(config);
     openServers.push(firstRelay);

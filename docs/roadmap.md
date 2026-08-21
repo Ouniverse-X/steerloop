@@ -31,7 +31,9 @@ web console without exposing App Server on the network.
 - [x] Durable local event journal
 - [x] Relay reconnect and event replay
 - [x] Short-code browser pairing
-- [ ] QR pairing and durable per-device identity
+- [x] Persistent browser device registry
+- [x] Device listing and revocation
+- [ ] QR pairing
 - [ ] Device-bound approval signatures
 - [x] TLS deployment guide
 - [ ] PWA install and push notifications

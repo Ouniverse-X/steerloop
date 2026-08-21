@@ -12,8 +12,11 @@ import {
   buildCommand,
   ControlClient,
   defaultRelayUrl,
+  listDevices,
   pairWithRelay,
+  revokeDevice,
   type ConnectionUpdate,
+  type DeviceView,
 } from "./connection.js";
 import {
   verifyApprovalIntegrity,
@@ -443,6 +446,8 @@ export function App() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [pairingCode, setPairingCode] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
+  const [devices, setDevices] = useState<DeviceView[]>([]);
+  const [devicesBusy, setDevicesBusy] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [approvalIntegrity, setApprovalIntegrity] = useState<Record<string, ApprovalIntegrity>>({});
   const [now, setNow] = useState(Date.now());
@@ -564,7 +569,11 @@ export function App() {
     if (code.length === 0) return;
     setPairingBusy(true);
     try {
-      const result = await pairWithRelay(draftSettings.url.trim(), code);
+      const result = await pairWithRelay(
+        draftSettings.url.trim(),
+        code,
+        navigator.userAgent.slice(0, 96),
+      );
       const next = { url: draftSettings.url.trim(), token: result.token ?? "" };
       localStorage.setItem("steerloop.relayUrl", next.url);
       localStorage.setItem("steerloop.token", next.token);
@@ -573,10 +582,37 @@ export function App() {
       setPairingCode("");
       setSettingsOpen(false);
       setNotice(`Paired with ${result.hostId ?? "host"}`);
+      setDevices(result.device === undefined ? devices : [result.device, ...devices]);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Pairing failed");
     } finally {
       setPairingBusy(false);
+    }
+  }
+
+  async function refreshDevices(): Promise<void> {
+    setDevicesBusy(true);
+    try {
+      setDevices(await listDevices(draftSettings.url.trim(), draftSettings.token));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not load devices");
+    } finally {
+      setDevicesBusy(false);
+    }
+  }
+
+  async function removeDevice(device: DeviceView): Promise<void> {
+    setDevicesBusy(true);
+    try {
+      await revokeDevice(draftSettings.url.trim(), draftSettings.token, device.id);
+      setDevices(devices.map((entry) => entry.id === device.id
+        ? { ...entry, revokedAt: new Date().toISOString() }
+        : entry));
+      setNotice(`Revoked ${device.name}`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not revoke device");
+    } finally {
+      setDevicesBusy(false);
     }
   }
 
@@ -693,6 +729,35 @@ export function App() {
               <label>Access token<input type="password" required value={draftSettings.token} onChange={(event) => setDraftSettings({ ...draftSettings, token: event.target.value })} /></label>
               <button className="button button-primary" type="submit">Save & reconnect</button>
             </form>
+            <section className="device-manager" aria-label="Paired devices">
+              <div className="device-manager-heading">
+                <div><p className="eyebrow">Devices</p><h3>Paired browsers</h3></div>
+                <button className="button button-secondary" type="button" disabled={devicesBusy} onClick={() => void refreshDevices()}>
+                  {devicesBusy ? "Loading..." : "Refresh"}
+                </button>
+              </div>
+              {devices.length === 0 ? (
+                <p className="device-empty">No devices loaded yet.</p>
+              ) : (
+                <ul className="device-list">
+                  {devices.map((device) => (
+                    <li key={device.id} className={device.revokedAt === undefined ? "" : "revoked"}>
+                      <span>
+                        <strong>{device.name}</strong>
+                        <small>{device.hostId} · last seen {relativeTime(device.lastSeenAt, now)}</small>
+                      </span>
+                      {device.revokedAt === undefined ? (
+                        <button className="button button-secondary" type="button" disabled={devicesBusy} onClick={() => void removeDevice(device)}>
+                          Revoke
+                        </button>
+                      ) : (
+                        <small>Revoked</small>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
             {connection.detail !== undefined && <p className="connection-detail">{connection.detail}</p>}
           </section>
         </div>

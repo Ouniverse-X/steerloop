@@ -9,6 +9,7 @@ export interface RelayConfig {
   maxPayloadBytes: number;
   journalPath?: string;
   journalSync?: boolean;
+  deviceRegistryPath?: string;
 }
 
 const DEVELOPMENT_TOKEN = "steerloop-local-dev";
@@ -62,6 +63,8 @@ export function loadRelayConfig(
 
   const journalPath = environment.STEERLOOP_JOURNAL_PATH ??
     "steerloop-data/relay-events.jsonl";
+  const deviceRegistryPath = environment.STEERLOOP_DEVICE_REGISTRY_PATH ??
+    "steerloop-data/relay-devices.json";
   return {
     host: environment.STEERLOOP_RELAY_HOST ?? "127.0.0.1",
     port: parsePositiveInteger(
@@ -91,6 +94,7 @@ export function loadRelayConfig(
       true,
       "STEERLOOP_JOURNAL_SYNC",
     ),
+    ...(deviceRegistryPath === "off" ? {} : { deviceRegistryPath }),
   };
 }
 

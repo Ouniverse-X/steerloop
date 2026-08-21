@@ -59,7 +59,8 @@ Open `http://<computer-lan-address>:5173` on the phone. Choose **Connect**, keep
 the automatically derived `ws://<computer-lan-address>:5173/ws` URL, and enter
 the pairing code printed by the host Agent. Vite proxies `/ws` and `/pair` to the
 local Relay during development, so the browser does not need direct access to
-port 8787.
+port 8787. After pairing, use **Refresh** in the Devices section to list paired
+browsers, and **Revoke** to invalidate a browser token.
 
 Plain HTTP and WebSocket traffic is not safe on an untrusted network. Some
 mobile browsers also restrict installable PWA and Web Crypto capabilities on
@@ -75,7 +76,10 @@ manager that will run Steerloop.
 
 For production-mode Relay and Agent processes, set exactly one of
 `STEERLOOP_TOKEN` or `STEERLOOP_TOKEN_FILE`. Use a unique high-entropy value and
-do not commit it. The PWA keeps its configured Relay URL and token in that
+do not commit it. Relay stores browser device records in
+`STEERLOOP_DEVICE_REGISTRY_PATH`, defaulting to
+`steerloop-data/relay-devices.json`; set it to `off` only for disposable tests.
+The PWA keeps its configured Relay URL and paired browser token in that
 browser's local storage during the alpha.
 
 For remote HTTPS/WSS deployment, persistent event storage, and secret-file token

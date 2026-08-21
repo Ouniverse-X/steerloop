@@ -38,8 +38,18 @@ interface PairingResponse {
   ok: boolean;
   token?: string;
   hostId?: string;
+  device?: DeviceView;
   expiresAt?: string;
   error?: string;
+}
+
+export interface DeviceView {
+  id: string;
+  name: string;
+  hostId: string;
+  createdAt: string;
+  lastSeenAt: string;
+  revokedAt?: string;
 }
 
 const RECONNECT_MIN_MS = 750;
@@ -87,17 +97,52 @@ export function pairingUrl(relayUrl: string): string {
   return url.toString();
 }
 
-export async function pairWithRelay(relayUrl: string, code: string): Promise<PairingResponse> {
+export function managementUrl(relayUrl: string, pathname: string): string {
+  const url = new URL(relayUrl);
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  url.pathname = pathname;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+export async function pairWithRelay(
+  relayUrl: string,
+  code: string,
+  deviceName: string,
+): Promise<PairingResponse> {
   const response = await fetch(pairingUrl(relayUrl), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, deviceName }),
   });
   const body = await response.json() as PairingResponse;
   if (!response.ok || !body.ok || body.token === undefined) {
     throw new Error(body.error ?? "Pairing failed");
   }
   return body;
+}
+
+export async function listDevices(relayUrl: string, token: string): Promise<DeviceView[]> {
+  const response = await fetch(managementUrl(relayUrl, "/devices"), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const body = await response.json() as { ok: boolean; devices?: DeviceView[]; error?: string };
+  if (!response.ok || !body.ok || body.devices === undefined) {
+    throw new Error(body.error ?? "Could not load devices");
+  }
+  return body.devices;
+}
+
+export async function revokeDevice(relayUrl: string, token: string, deviceId: string): Promise<void> {
+  const response = await fetch(managementUrl(relayUrl, `/devices/${encodeURIComponent(deviceId)}`), {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const body = await response.json() as { ok: boolean; error?: string };
+  if (!response.ok || !body.ok) {
+    throw new Error(body.error ?? "Could not revoke device");
+  }
 }
 
 export class ControlClient {
