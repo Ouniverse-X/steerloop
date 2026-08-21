@@ -35,7 +35,9 @@ event history for reconnects. Persistent encrypted history comes later.
 ### Web console
 
 The PWA reduces events into a local view of hosts, sessions, recent activity,
-and pending approvals. It never constructs arbitrary host commands.
+and pending approvals. It never constructs arbitrary host commands. Before it
+enables an approval decision, it independently recomputes the digest from the
+displayed security-sensitive fields and compares it with the host-bound digest.
 
 ## Trust boundaries
 
@@ -55,8 +57,9 @@ and pending approvals. It never constructs arbitrary host commands.
 
 During the initial milestone, the relay and clients share a bearer token. The
 roadmap replaces this with device identities, end-to-end encryption, and signed
-approval decisions. The host-side digest check is present from the beginning so
-the relay cannot substitute a different pending request without detection.
+approval decisions. Host-side and browser-side digest checks are present from
+the beginning, so a relay cannot substitute or misrepresent a different pending
+request without the decision being blocked.
 
 ## Event ordering
 

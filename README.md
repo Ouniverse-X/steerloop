@@ -12,8 +12,8 @@ run.
 
 ## Project status
 
-Steerloop is in an early private-alpha stage. The first milestone is a local
-end-to-end demo with four parts:
+Steerloop is in an early private-alpha stage. The local end-to-end milestone now
+includes four parts:
 
 - a shared, provider-neutral event protocol;
 - a host agent with Codex App Server and demo adapters;
@@ -39,7 +39,8 @@ Codex App Server ──stdio── Steerloop Agent
 Codex remains responsible for its sandbox and approval policy. Steerloop adds a
 transport and control surface; it does not bypass the host's security boundary.
 
-See [the architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and
+See [the getting-started guide](docs/getting-started.md),
+[architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and
 [product proposal](docs/product-proposal.md) for details.
 
 ## Local development
@@ -59,6 +60,12 @@ The development command starts the relay, demo agent, and web console. It uses
 the local-only development token `steerloop-local-dev`. Open the URL printed by
 Vite and wait for the demo session to request an approval.
 
+To connect the local Codex App Server instead:
+
+```bash
+STEERLOOP_ADAPTER=codex npm run dev
+```
+
 For separate processes:
 
 ```bash
@@ -67,9 +74,10 @@ npm run dev:agent
 npm run dev:web
 ```
 
-Before exposing any component beyond localhost, set a strong
-`STEERLOOP_TOKEN`, terminate TLS at a trusted reverse proxy, and review
-[SECURITY.md](SECURITY.md).
+For phone testing on a trusted LAN, real Codex setup, and environment variables,
+follow [the getting-started guide](docs/getting-started.md). Before exposing any
+component beyond localhost, set a strong `STEERLOOP_TOKEN`, terminate TLS at a
+trusted reverse proxy, and review [SECURITY.md](SECURITY.md).
 
 ## Quality gates
 

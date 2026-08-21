@@ -4,23 +4,23 @@
 
 - [x] Product proposal and positioning
 - [x] Repository conventions and CI
-- [ ] Shared protocol and reducer
-- [ ] Local demo adapter
-- [ ] In-memory relay
-- [ ] Mobile-first web console
+- [x] Shared protocol and reducer
+- [x] Local demo adapter
+- [x] In-memory relay
+- [x] Mobile-first web console
 
 Exit condition: `npm run dev` demonstrates one full approval round trip and
 `npm run check` passes locally and in CI.
 
 ## Milestone 1 — Codex local integration
 
-- [ ] Spawn Codex App Server over stdio
-- [ ] Initialize and list stored threads
-- [ ] Normalize thread and turn lifecycle events
-- [ ] Forward command and file-change approval requests
-- [ ] Return one-time accept, decline, and cancel decisions
-- [ ] Queue or steer text input
-- [ ] Interrupt an active turn
+- [x] Spawn Codex App Server over stdio
+- [x] Initialize and list stored threads
+- [x] Normalize thread and turn lifecycle events
+- [x] Forward command and file-change approval requests
+- [x] Return one-time accept, decline, and cancel decisions
+- [x] Queue or steer text input
+- [x] Interrupt an active turn
 - [ ] Compatibility tests against a pinned Codex CLI version
 
 Exit condition: a real Codex session can be monitored and unblocked from the

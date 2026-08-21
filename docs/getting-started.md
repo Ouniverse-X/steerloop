@@ -1,0 +1,80 @@
+# Getting started
+
+Steerloop's current alpha is designed to prove the complete local control loop
+before adding internet-facing deployment. Start with the demo adapter, then opt
+into the real Codex adapter.
+
+## Local demo
+
+Requirements:
+
+- Node.js 18.18 or newer (Node.js 20 is used in CI);
+- npm 9 or newer.
+
+From the repository root:
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The demo session requests permission to run the
+repository checks after a short delay. Its command, working directory, reason,
+expiration, and verified request digest are visible before a decision is sent.
+
+The development stack uses `steerloop-local-dev`. That token is intentionally
+unsafe outside localhost.
+
+## Connect local Codex
+
+Install and authenticate the Codex CLI first, then start the stack with:
+
+```bash
+STEERLOOP_ADAPTER=codex npm run dev
+```
+
+The Agent launches Codex App Server over local stdio, lists recent threads, and
+normalizes lifecycle, activity, diff, and approval events. App Server is never
+bound to a network interface by Steerloop.
+
+## Test from a phone on a trusted LAN
+
+This mode is for temporary development on a private network, not the public
+internet. Generate a token, bind the Relay and Vite to the LAN, and allow ports
+5173 and 8787 only from that network:
+
+```bash
+export STEERLOOP_TOKEN="$(openssl rand -hex 32)"
+export STEERLOOP_RELAY_HOST=0.0.0.0
+export STEERLOOP_WEB_HOST=0.0.0.0
+npm run dev
+```
+
+Open `http://<computer-lan-address>:5173` on the phone. Choose **Connect**, keep
+the automatically derived `ws://<computer-lan-address>:8787/ws` URL, and enter
+the generated token.
+
+Plain HTTP and WebSocket traffic is not safe on an untrusted network. Some
+mobile browsers also restrict installable PWA and Web Crypto capabilities on
+non-secure origins; Steerloop blocks approval when the browser cannot verify the
+host-bound digest. A remote deployment therefore requires HTTPS/WSS at a trusted
+reverse proxy.
+
+## Configuration
+
+The main settings are documented in [`.env.example`](../.env.example). Node does
+not automatically load that file: export values in the shell or use the service
+manager that will run Steerloop.
+
+For production-mode Relay and Agent processes, `STEERLOOP_TOKEN` is mandatory.
+Use a unique high-entropy value and do not commit it. The PWA keeps its configured
+Relay URL and token in that browser's local storage during the alpha.
+
+## Validate a change
+
+```bash
+npm run check
+```
+
+This runs protocol, Relay, Agent, browser-security, and full approval-round-trip
+tests, then creates production builds for every workspace.

@@ -30,4 +30,10 @@ The development relay is not production-ready. In particular:
 
 The host agent never accepts arbitrary shell commands from the relay. Remote
 commands are validated against a narrow protocol allowlist, and approval
-decisions are bound to the digest of a pending request.
+decisions are bound to the digest of a pending request. The browser recomputes
+that digest over the security-sensitive fields and disables approval if the
+displayed request does not match.
+
+During the alpha, the browser stores its Relay URL and bearer token in local
+storage. Do not use a shared or untrusted browser profile, and treat any script
+running on the PWA origin as security-sensitive.
