@@ -9,7 +9,7 @@ const controller = new AgentController(config, adapter);
 
 await controller.start();
 console.log(
-  `[agent] ${config.hostId} connected to ${config.relayUrl} with ${adapter.name} adapter`,
+  `[agent] ${config.hostId} started with ${adapter.name} adapter; relay ${config.relayUrl}`,
 );
 
 async function shutdown(): Promise<void> {

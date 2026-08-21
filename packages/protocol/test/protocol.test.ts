@@ -173,4 +173,49 @@ describe("control-plane reducer", () => {
     const afterFirst = reduceEvent(createEmptyState(), first);
     expect(reduceEvent(afterFirst, stale)).toBe(afterFirst);
   });
+
+  it("accepts a fresh sequence after the host agent restarts", () => {
+    const beforeRestart = [
+      event(1, {
+        type: "host.connected",
+        payload: {
+          name: "Devbox",
+          platform: "linux",
+          agentVersion: "0.1.0",
+          capabilities: [],
+        },
+      }),
+      event(
+        2,
+        {
+          type: "session.upserted",
+          payload: { title: "Long task", source: "codex", status: "running" },
+        },
+        "session-before-restart",
+      ),
+    ].reduce(reduceEvent, createEmptyState());
+    const restarted = eventEnvelopeSchema.parse({
+      kind: "event",
+      protocolVersion: PROTOCOL_VERSION,
+      eventId: "event-from-new-agent-process",
+      sequence: 1,
+      hostId: "host-1",
+      emittedAt: new Date(10_000).toISOString(),
+      event: {
+        type: "host.connected",
+        payload: {
+          name: "Devbox",
+          platform: "linux",
+          agentVersion: "0.1.0",
+          capabilities: [],
+        },
+      },
+    });
+
+    const state = reduceEvent(beforeRestart, restarted);
+
+    expect(state.hosts["host-1"]?.online).toBe(true);
+    expect(state.lastSequenceByHost["host-1"]).toBe(1);
+    expect(state.sessions["session-before-restart"]?.status).toBe("offline");
+  });
 });

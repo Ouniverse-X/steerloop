@@ -113,9 +113,15 @@ export function reduceEvent(
   envelope: EventEnvelope,
 ): ControlPlaneState {
   const lastSequence = previous.lastSequenceByHost[envelope.hostId] ?? 0;
+  const previousHost = previous.hosts[envelope.hostId];
+  const hostRestarted =
+    envelope.event.type === "host.connected" &&
+    envelope.sequence <= lastSequence &&
+    previousHost !== undefined &&
+    Date.parse(envelope.emittedAt) > Date.parse(previousHost.lastSeenAt);
   if (
-    envelope.sequence <= lastSequence ||
-    previous.recentEventIds.includes(envelope.eventId)
+    previous.recentEventIds.includes(envelope.eventId) ||
+    (envelope.sequence <= lastSequence && !hostRestarted)
   ) {
     return previous;
   }
@@ -132,6 +138,28 @@ export function reduceEvent(
       -MAX_EVENT_IDS,
     ),
   };
+
+  if (hostRestarted) {
+    for (const session of Object.values(next.sessions)) {
+      if (session.hostId === envelope.hostId) {
+        next.sessions[session.id] = {
+          ...session,
+          status: "offline",
+          detail: "Host agent restarted",
+          updatedAt: envelope.emittedAt,
+        };
+      }
+    }
+    for (const approval of Object.values(next.approvals)) {
+      if (approval.hostId === envelope.hostId && approval.status === "pending") {
+        next.approvals[approval.id] = {
+          ...approval,
+          status: "cancel",
+          resolvedAt: envelope.emittedAt,
+        };
+      }
+    }
+  }
 
   const existingSession =
     envelope.sessionId === undefined

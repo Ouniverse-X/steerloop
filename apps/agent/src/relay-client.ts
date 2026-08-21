@@ -34,7 +34,7 @@ export class RelayClient {
 
   async start(): Promise<void> {
     this.stopped = false;
-    await this.connectOnce();
+    void this.connectOnce().catch(() => this.scheduleReconnect());
   }
 
   async stop(): Promise<void> {
