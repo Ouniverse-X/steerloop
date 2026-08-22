@@ -1,6 +1,6 @@
 {
   "name": "@steerloop/dsh-plugin",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "description": "DeepSeek Harness Cordis plugin that bridges DSH sessions and approvals to Steerloop mobile/web control plane.",
   "type": "module",
   "main": "src/index.js",
@@ -29,9 +29,10 @@
   "dependencies": {
     "ws": "^8.18.1"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "homepage": "https://github.com/Ouniverse-X/steerloop#readme",
   "bugs": {
@@ -57,6 +58,7 @@
   },
   "types": "src/index.d.ts",
   "files": [
+    "LICENSE",
     "cordis.patch.yml",
     "src/",
     "README.md",

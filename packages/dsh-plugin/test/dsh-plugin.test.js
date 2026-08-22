@@ -36,7 +36,6 @@ describe("DeepSeek Harness mapping", () => {
     const material = canonicalizeApproval({
       approvalId: "approval-1",
       kind: "command",
-      title: "Approve bash",
       reason: "sandbox escalation",
       command: "npm run check",
       requestedPermissions: ["tool:bash", "call:call-1"],

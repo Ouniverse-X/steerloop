@@ -27,7 +27,15 @@ npm run dev:relay
 npm run dev:web
 ```
 
-Add the plugin as a Harness patch overlay:
+Install the npm alpha package into the Harness profile:
+
+```bash
+dsh plugin --profile headless add @steerloop/dsh-plugin@alpha
+```
+
+The package declares its Cordis bundle, so `dsh plugin add` activates the
+Steerloop patch automatically. For source-checkout development before installing
+the package, add the plugin as a Harness patch overlay:
 
 ```yaml
 - insert:
@@ -94,11 +102,14 @@ The plugin was loaded into the local DeepSeek Harness checkout at
 - `dsh --profile headless --patch <tmp patch> "Steerloop smoke: say hello and stop."`;
 - temporary Steerloop Relay on port `18887`, where Harness printed the pairing
   code and Relay logged the host pairing offer.
+- tarball installation into an isolated `DSH_HOME`, confirming automatic bundle
+  activation without an extra `--patch`.
+- signed approve and decline decisions over a paired-device approval flow.
 
 Reusable overlays are available under
 [`examples/deepseek-harness`](../examples/deepseek-harness/README.md).
-Use `source-checkout.cordis.yml` for this local repository checkout before the
-package is installed into a Harness profile.
+Use `source-checkout.cordis.yml` only for this local repository checkout before
+the package is installed into a Harness profile.
 
 ## Publishing
 

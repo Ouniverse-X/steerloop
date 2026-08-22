@@ -9,7 +9,7 @@ After the package is published:
 
 ```bash
 source /home/beihang/projects/Harness/dsh-env.sh
-dsh plugin --profile headless add @steerloop/dsh-plugin
+dsh plugin --profile headless add @steerloop/dsh-plugin@alpha
 ```
 
 For release-path testing before publication, install the packed tarball into
@@ -19,7 +19,7 @@ the profile:
 cd /home/beihang/projects/Steerloop
 npm pack -w @steerloop/dsh-plugin
 source /home/beihang/projects/Harness/dsh-env.sh
-dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0.tgz
+dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0-alpha.0.tgz
 ```
 
 For active local development before publication, install this checkout into the
@@ -93,6 +93,7 @@ Run the source-checkout smoke from the Steerloop repository:
 ```bash
 examples/deepseek-harness/smoke-source-checkout.sh
 examples/deepseek-harness/smoke-tarball-install.sh
+examples/deepseek-harness/smoke-approval-e2e.sh
 ```
 
 This integration was verified against the local Harness checkout at
@@ -124,3 +125,6 @@ Smoke results:
 - With an isolated temporary `DSH_HOME`, `smoke-tarball-install.sh` packed the
   npm tarball, installed it with `dsh plugin --profile headless add`, verified
   automatic bundle activation, then ran Harness without any extra `--patch`.
+- `smoke-approval-e2e.sh` starts real Relay and Harness processes, pairs a
+  device, signs approval decisions, verifies approve continues execution, and
+  verifies decline leaves the workspace unchanged.

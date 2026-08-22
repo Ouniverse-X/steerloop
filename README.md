@@ -43,8 +43,14 @@ See [the getting-started guide](docs/getting-started.md),
 [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and
 [product proposal](docs/product-proposal.md) for details.
 
-For DeepSeek Harness, use the
-[Cordis plugin bridge](docs/deepseek-harness-plugin.md).
+For DeepSeek Harness, install the alpha Cordis plugin package:
+
+```bash
+dsh plugin --profile headless add @steerloop/dsh-plugin@alpha
+```
+
+See the [Cordis plugin bridge](docs/deepseek-harness-plugin.md) for
+configuration and local development overlays.
 
 For an internet-facing HTTPS/WSS test deployment, follow the
 [remote deployment guide](deploy/README.md).
@@ -115,5 +121,4 @@ should follow the private reporting process in [SECURITY.md](SECURITY.md).
 
 ## License
 
-No open-source license has been selected yet. All rights are reserved until a
-license is added to this repository.
+MIT. See [LICENSE](LICENSE).

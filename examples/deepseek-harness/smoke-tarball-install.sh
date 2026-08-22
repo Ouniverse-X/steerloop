@@ -34,14 +34,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-(
+pack_output="$(
   cd "$STEERLOOP_ROOT"
-  npm pack -w @steerloop/dsh-plugin --pack-destination "$work_dir" >/dev/null
-)
-
-tarball="$work_dir/steerloop-dsh-plugin-0.1.0.tgz"
+  npm pack -w @steerloop/dsh-plugin --pack-destination "$work_dir" 2>/dev/null
+)"
+tarball_name="$(printf '%s\n' "$pack_output" | tail -n 1)"
+tarball="$work_dir/$tarball_name"
 if [[ ! -f "$tarball" ]]; then
   echo "Expected packed tarball was not created: $tarball" >&2
+  printf '%s\n' "$pack_output" >&2
   exit 1
 fi
 

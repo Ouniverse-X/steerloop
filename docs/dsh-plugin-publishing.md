@@ -12,10 +12,10 @@ published outside the repository.
 - Types: `src/index.d.ts`
 - Runtime dependency: `ws`
 - Node engine: `^22.19.0 || >=24.0.0`
-- License field: `UNLICENSED`
+- License field: `MIT`
 
-The package is technically packable, but public open-source publication should
-wait until the repository license is selected.
+The package is packable and ready for alpha publication after the checks below
+pass.
 
 ## Pre-publish checks
 
@@ -27,6 +27,7 @@ npm run test -w @steerloop/dsh-plugin
 npm pack --dry-run -w @steerloop/dsh-plugin
 examples/deepseek-harness/smoke-source-checkout.sh
 examples/deepseek-harness/smoke-tarball-install.sh
+examples/deepseek-harness/smoke-approval-e2e.sh
 npm run check
 ```
 
@@ -35,19 +36,17 @@ operator's normal Harness profiles. It verifies that `dsh plugin add` records
 `@steerloop/dsh-plugin` as a dependency, activates it as a bundle, and boots
 Harness without an extra `--patch`.
 
-## Publication blockers
+## Publication checklist
 
-- Select and commit the repository/package license before an open-source npm
-  release.
-- Decide whether the first published version should remain `0.1.0` or move to
-  `0.1.0-alpha.0`.
-- Create a release tag and changelog entry.
+- Confirm npm authentication with `npm whoami`.
+- Confirm package availability with `npm view @steerloop/dsh-plugin`.
 - Confirm package ownership for the `@steerloop` npm scope.
+- Create a release tag and changelog entry after a successful alpha publish.
 
 ## Publish command
 
-After blockers are resolved and checks pass:
+For the first alpha release:
 
 ```bash
-npm publish -w @steerloop/dsh-plugin --access public
+npm publish -w @steerloop/dsh-plugin --access public --tag alpha --registry https://registry.npmjs.org/
 ```

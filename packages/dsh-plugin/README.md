@@ -6,11 +6,9 @@ remote approval handling to existing `dsh` profiles.
 
 ## Status
 
-This package is release-candidate quality for private npm testing. It has been
-loaded by a real DeepSeek Harness `headless` profile and verified against a
-local Steerloop Relay. The package is marked `UNLICENSED` until the repository
-license is selected; do not publish it as an open-source package before that
-product decision is made.
+This package is alpha quality for npm testing. It has been loaded by a real
+DeepSeek Harness `headless` profile and verified against a local Steerloop Relay,
+including paired-device signed approve and decline approval flows.
 
 ## Requirements
 
@@ -36,7 +34,7 @@ plane for long-running Harness jobs.
 After publication:
 
 ```bash
-dsh plugin --profile headless add @steerloop/dsh-plugin
+dsh plugin --profile headless add @steerloop/dsh-plugin@alpha
 ```
 
 Before publication, install from a locally packed tarball for the closest npm
@@ -44,7 +42,7 @@ release simulation:
 
 ```bash
 npm pack -w @steerloop/dsh-plugin
-dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0.tgz
+dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0-alpha.0.tgz
 ```
 
 For active local development you can install this checkout directly:
@@ -117,6 +115,7 @@ npm run test -w @steerloop/dsh-plugin
 npm pack --dry-run -w @steerloop/dsh-plugin
 examples/deepseek-harness/smoke-source-checkout.sh
 examples/deepseek-harness/smoke-tarball-install.sh
+examples/deepseek-harness/smoke-approval-e2e.sh
 ```
 
 ## Current limitations
