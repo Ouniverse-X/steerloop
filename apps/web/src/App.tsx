@@ -142,9 +142,6 @@ function EmptyState({
 
   return (
     <section className="empty-state panel">
-      <div className={`empty-orbit${connected ? " connected" : ""}`} aria-hidden="true">
-        <span />
-      </div>
       <p className="eyebrow">{connected ? "Relay connected" : "Relay disconnected"}</p>
       <h2>{heading}</h2>
       <p>{body}</p>
@@ -162,18 +159,22 @@ interface ApprovalCardProps {
   approval: ApprovalView;
   integrity: ApprovalIntegrity;
   now: number;
-  onResolve(approval: ApprovalView, decision: ApprovalDecision): void;
+  onResolve(approval: ApprovalView, decision: ApprovalDecision): Promise<boolean>;
+  onAskSaferPath(approval: ApprovalView): Promise<void>;
 }
 
-function ApprovalCard({ approval, integrity, now, onResolve }: ApprovalCardProps) {
+function ApprovalCard({ approval, integrity, now, onResolve, onAskSaferPath }: ApprovalCardProps) {
   const expired = Date.parse(approval.expiresAt) <= now;
   const blocked = expired || integrity !== "valid";
+  const destination = approval.networkHost === undefined
+    ? undefined
+    : `${approval.networkProtocol ?? "network"}://${approval.networkHost}`;
   return (
     <article className="approval-card">
       <div className="approval-heading">
         <div className="approval-icon" aria-hidden="true">!</div>
         <div>
-          <p className="eyebrow">{approval.kind.replace("_", " ")} request</p>
+          <p className="eyebrow">Approval required</p>
           <h3>{approval.title}</h3>
         </div>
         <span className={expired ? "expiry expired" : "expiry"}>
@@ -196,7 +197,7 @@ function ApprovalCard({ approval, integrity, now, onResolve }: ApprovalCardProps
           <div><dt>Write scope</dt><dd>{approval.grantRoot}</dd></div>
         )}
         {approval.networkHost !== undefined && (
-          <div><dt>Destination</dt><dd>{approval.networkProtocol ?? "network"}://{approval.networkHost}</dd></div>
+          <div><dt>Destination</dt><dd>{destination}</dd></div>
         )}
         {approval.requestedPermissions !== undefined && (
           <div>
@@ -223,7 +224,7 @@ function ApprovalCard({ approval, integrity, now, onResolve }: ApprovalCardProps
       </p>
       <div className="approval-actions">
         <button
-          className="button button-primary"
+          className="button button-primary approval-approve"
           type="button"
           disabled={blocked}
           onClick={() => onResolve(approval, "approve_once")}
@@ -231,15 +232,52 @@ function ApprovalCard({ approval, integrity, now, onResolve }: ApprovalCardProps
           Approve once
         </button>
         <button
-          className="button button-secondary"
+          className="button button-secondary approval-decline"
           type="button"
           disabled={blocked}
           onClick={() => onResolve(approval, "decline")}
         >
           Decline
         </button>
+        <button
+          className="button button-secondary approval-safer"
+          type="button"
+          disabled={blocked}
+          onClick={() => void onAskSaferPath(approval)}
+        >
+          Ask safer way
+        </button>
       </div>
     </article>
+  );
+}
+
+interface ApprovalAlertProps {
+  approvals: ApprovalView[];
+  sessions: SessionView[];
+  now: number;
+  onSelect(id: string): void;
+}
+
+function ApprovalAlert({ approvals, sessions, now, onSelect }: ApprovalAlertProps) {
+  const first = approvals[0];
+  if (first === undefined) return null;
+  const session = sessions.find((entry) => entry.id === first.sessionId);
+  return (
+    <section className="approval-alert" aria-live="polite">
+      <div>
+        <p className="eyebrow">Action needed</p>
+        <strong>{approvals.length === 1 ? first.title : `${approvals.length} approvals waiting`}</strong>
+        <span>
+          {session?.title ?? first.sessionId} · expires {relativeTime(first.expiresAt, now)}
+        </span>
+      </div>
+      {session !== undefined && (
+        <button className="button button-primary" type="button" onClick={() => onSelect(session.id)}>
+          Review
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -315,7 +353,8 @@ interface SessionDetailProps {
   approvals: ApprovalView[];
   approvalIntegrity: Record<string, ApprovalIntegrity>;
   now: number;
-  onResolve(approval: ApprovalView, decision: ApprovalDecision): void;
+  onResolve(approval: ApprovalView, decision: ApprovalDecision): Promise<boolean>;
+  onAskSaferPath(approval: ApprovalView): Promise<void>;
   onInterrupt(): void;
   onPrompt(text: string, behavior: "queue" | "steer"): void;
 }
@@ -327,6 +366,7 @@ function SessionDetail({
   approvalIntegrity,
   now,
   onResolve,
+  onAskSaferPath,
   onInterrupt,
   onPrompt,
 }: SessionDetailProps) {
@@ -365,6 +405,7 @@ function SessionDetail({
           integrity={approvalIntegrity[approval.id] ?? "checking"}
           now={now}
           onResolve={onResolve}
+          onAskSaferPath={onAskSaferPath}
         />
       ))}
 
@@ -531,20 +572,22 @@ export function App() {
     undefined,
   );
 
-  function send(command: CommandEnvelope): void {
+  function send(command: CommandEnvelope): boolean {
     try {
       clientRef.current?.send(command);
       setNotice("Command sent securely");
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not send command");
+      return false;
     }
   }
 
-  async function resolveApproval(approval: ApprovalView, decision: ApprovalDecision): Promise<void> {
+  async function resolveApproval(approval: ApprovalView, decision: ApprovalDecision): Promise<boolean> {
     const integrity = await verifyApprovalIntegrity(approval);
     if (integrity !== "valid") {
       setNotice("Approval blocked: the request could not be verified");
-      return;
+      return false;
     }
     let command = buildCommand(approval.hostId, approval.sessionId, {
       type: "approval.resolve",
@@ -557,7 +600,20 @@ export function App() {
     if (settings.deviceId !== undefined) {
       command = await signApprovalCommand(command, settings.deviceId);
     }
-    send(command);
+    return send(command);
+  }
+
+  async function askForSaferPath(approval: ApprovalView): Promise<void> {
+    const declined = await resolveApproval(approval, "decline");
+    if (!declined) return;
+    const requestedAction = approval.command ?? approval.title;
+    send(buildCommand(approval.hostId, approval.sessionId, {
+      type: "session.prompt",
+      payload: {
+        behavior: "queue",
+        text: `I declined the previous approval request for "${requestedAction}". Please continue with a safer approach that stays inside the current workspace and avoids expanding permissions. Explain the tradeoff before requesting another approval.`,
+      },
+    }));
   }
 
   function saveSettings(event: FormEvent): void {
@@ -630,7 +686,9 @@ export function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="Steerloop home">
-          <span className="brand-mark" aria-hidden="true"><i /></span>
+          <span className="brand-mark" aria-hidden="true">
+            <img src="/steerloop-icon.png" alt="" />
+          </span>
           <span><strong>steerloop</strong><small>agent control plane</small></span>
         </a>
         <div className="topbar-actions">
@@ -638,7 +696,7 @@ export function App() {
             <i />{connectionCopy[connection.status]}
           </span>
           <button className="settings-button" type="button" onClick={() => setSettingsOpen(true)}>
-            <span aria-hidden="true">⌘</span><span>Connection</span>
+            <span aria-hidden="true">+</span><span>Pair / settings</span>
           </button>
         </div>
       </header>
@@ -675,6 +733,13 @@ export function App() {
           </div>
         </section>
 
+        <ApprovalAlert
+          approvals={pendingApprovals}
+          sessions={allSessions}
+          now={now}
+          onSelect={setSelectedId}
+        />
+
         {sessions.length === 0 ? (
           <EmptyState
             connection={connection}
@@ -704,6 +769,7 @@ export function App() {
                 approvalIntegrity={approvalIntegrity}
                 now={now}
                 onResolve={resolveApproval}
+                onAskSaferPath={askForSaferPath}
                 onInterrupt={() => {
                   if (window.confirm(`Interrupt “${selected.title}”?`)) {
                     send(buildCommand(selected.hostId, selected.id, { type: "session.interrupt", payload: {} }));
@@ -726,14 +792,15 @@ export function App() {
           <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="dialog-close" type="button" onClick={() => setSettingsOpen(false)} aria-label="Close">×</button>
             <p className="eyebrow">Connection</p>
-            <h2 id="settings-title">Relay settings</h2>
-            <p>Pair this browser with a host code, or enter an existing Relay token.</p>
+            <h2 id="settings-title">Pair this browser</h2>
+            <p>Enter the pairing code printed by the host. Advanced Relay settings are available below.</p>
             <form className="pairing-form" onSubmit={(event) => void pairDevice(event)}>
               <label>Pairing code<input inputMode="text" autoComplete="one-time-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value.toUpperCase())} placeholder="ABCD-1234" /></label>
               <button className="button button-primary" type="submit" disabled={pairingBusy || pairingCode.trim().length === 0}>
                 {pairingBusy ? "Pairing..." : "Pair device"}
               </button>
             </form>
+            <p className="settings-subhead">Manual connection</p>
             <form onSubmit={saveSettings}>
               <label>WebSocket URL<input type="url" required value={draftSettings.url} onChange={(event) => setDraftSettings({ ...draftSettings, url: event.target.value })} /></label>
               <label>Access token<input type="password" required value={draftSettings.token} onChange={(event) => setDraftSettings({ ...draftSettings, token: event.target.value })} /></label>

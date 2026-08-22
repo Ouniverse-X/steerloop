@@ -4,13 +4,19 @@
   "description": "Keep every agent loop within reach.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b1110",
-  "theme_color": "#0b1110",
+  "background_color": "#061a2f",
+  "theme_color": "#061a2f",
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/steerloop-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
