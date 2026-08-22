@@ -8,6 +8,7 @@ published outside the repository.
 - Package: `@steerloop/dsh-plugin`
 - Location: `packages/dsh-plugin`
 - Entrypoint: `src/index.js`
+- Bundle patch: `cordis.patch.yml` via `dsh.bundle.patch`
 - Types: `src/index.d.ts`
 - Runtime dependency: `ws`
 - Node engine: `^22.19.0 || >=24.0.0`
@@ -25,15 +26,14 @@ npm install
 npm run test -w @steerloop/dsh-plugin
 npm pack --dry-run -w @steerloop/dsh-plugin
 examples/deepseek-harness/smoke-source-checkout.sh
+examples/deepseek-harness/smoke-tarball-install.sh
 npm run check
 ```
 
-For a real npm release, also test installation into a clean Harness profile:
-
-```bash
-dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0.tgz
-dsh --profile headless --patch /home/beihang/projects/Steerloop/examples/deepseek-harness/local.cordis.yml "run a smoke task"
-```
+The tarball smoke uses a temporary `DSH_HOME`, so it does not mutate the
+operator's normal Harness profiles. It verifies that `dsh plugin add` records
+`@steerloop/dsh-plugin` as a dependency, activates it as a bundle, and boots
+Harness without an extra `--patch`.
 
 ## Publication blockers
 

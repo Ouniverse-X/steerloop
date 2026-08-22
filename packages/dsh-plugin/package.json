@@ -57,8 +57,14 @@
   },
   "types": "src/index.d.ts",
   "files": [
+    "cordis.patch.yml",
     "src/",
     "README.md",
     "package.json"
-  ]
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

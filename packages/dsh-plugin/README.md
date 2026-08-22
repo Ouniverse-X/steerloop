@@ -39,14 +39,24 @@ After publication:
 dsh plugin --profile headless add @steerloop/dsh-plugin
 ```
 
-Before publication, install from this checkout:
+Before publication, install from a locally packed tarball for the closest npm
+release simulation:
+
+```bash
+npm pack -w @steerloop/dsh-plugin
+dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0.tgz
+```
+
+For active local development you can install this checkout directly:
 
 ```bash
 dsh plugin --profile headless add "file:/home/beihang/projects/Steerloop/packages/dsh-plugin"
 ```
 
-For one-off development without modifying the Harness profile, use the
-`source-checkout.cordis.yml` overlay in the Steerloop repository examples.
+The package declares a DeepSeek Harness bundle, so `dsh plugin add` activates
+its `cordis.patch.yml` layer automatically. For one-off development without
+modifying the Harness profile, use the `source-checkout.cordis.yml` overlay in
+the Steerloop repository examples.
 
 ## Cordis configuration
 
@@ -106,6 +116,7 @@ From the Steerloop repository root:
 npm run test -w @steerloop/dsh-plugin
 npm pack --dry-run -w @steerloop/dsh-plugin
 examples/deepseek-harness/smoke-source-checkout.sh
+examples/deepseek-harness/smoke-tarball-install.sh
 ```
 
 ## Current limitations

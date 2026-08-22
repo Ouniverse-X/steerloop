@@ -12,15 +12,27 @@ source /home/beihang/projects/Harness/dsh-env.sh
 dsh plugin --profile headless add @steerloop/dsh-plugin
 ```
 
-For local development before publication, install this checkout into the profile
-with a file dependency from the Harness profile directory:
+For release-path testing before publication, install the packed tarball into
+the profile:
+
+```bash
+cd /home/beihang/projects/Steerloop
+npm pack -w @steerloop/dsh-plugin
+source /home/beihang/projects/Harness/dsh-env.sh
+dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0.tgz
+```
+
+For active local development before publication, install this checkout into the
+profile with a file dependency from the Harness profile directory:
 
 ```bash
 source /home/beihang/projects/Harness/dsh-env.sh
 dsh plugin --profile headless add "file:/home/beihang/projects/Steerloop/packages/dsh-plugin"
 ```
 
-For one-off source checkout testing without modifying a Harness profile, use
+The npm package declares a Harness bundle, so `dsh plugin add` automatically
+adds `@steerloop/dsh-plugin` to the profile bundle list. For one-off source
+checkout testing without modifying a Harness profile, use
 [`source-checkout.cordis.yml`](source-checkout.cordis.yml). It points at this
 workspace's plugin source path.
 
@@ -80,6 +92,7 @@ Run the source-checkout smoke from the Steerloop repository:
 
 ```bash
 examples/deepseek-harness/smoke-source-checkout.sh
+examples/deepseek-harness/smoke-tarball-install.sh
 ```
 
 This integration was verified against the local Harness checkout at
@@ -105,6 +118,9 @@ Smoke results:
   `steerloop` plugin entry.
 - `dsh --profile headless --patch <tmp patch> "Steerloop smoke: say hello and stop."`
   loaded the plugin and completed the Harness task.
-- With a temporary Relay on port `18887`, the plugin connected and printed
-  `pairing code DSH-2026 registered`; Relay logged the corresponding host
+- With a temporary Relay on port `18887`, the source overlay connected and
+  registered pairing code `DSH-2026`; Relay logged the corresponding host
   pairing offer.
+- With an isolated temporary `DSH_HOME`, `smoke-tarball-install.sh` packed the
+  npm tarball, installed it with `dsh plugin --profile headless add`, verified
+  automatic bundle activation, then ran Harness without any extra `--patch`.
