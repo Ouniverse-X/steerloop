@@ -17,7 +17,7 @@ with a file dependency from the Harness profile directory:
 
 ```bash
 source /home/beihang/projects/Harness/dsh-env.sh
-dsh plugin --profile headless add "file:/home/beihang/projects/Brainwaves/steerloop/packages/dsh-plugin"
+dsh plugin --profile headless add "file:/home/beihang/projects/Steerloop/packages/dsh-plugin"
 ```
 
 For one-off source checkout testing without modifying a Harness profile, use
@@ -29,7 +29,7 @@ workspace's plugin source path.
 Start Steerloop:
 
 ```bash
-cd /home/beihang/projects/Brainwaves/steerloop
+cd /home/beihang/projects/Steerloop
 npm run dev:relay
 npm run dev:web
 ```
@@ -39,7 +39,7 @@ Run Harness with the local Steerloop overlay:
 ```bash
 cd /home/beihang/projects/Harness/deepseek-harness
 source /home/beihang/projects/Harness/dsh-env.sh
-dsh --profile headless --patch /home/beihang/projects/Brainwaves/steerloop/examples/deepseek-harness/local.cordis.yml "run a quick smoke task"
+dsh --profile headless --patch /home/beihang/projects/Steerloop/examples/deepseek-harness/local.cordis.yml "run a quick smoke task"
 ```
 
 When testing this checkout before installing the package, replace
@@ -62,7 +62,7 @@ export STEERLOOP_HOST_NAME="gpu26 DeepSeek Harness"
 Then run:
 
 ```bash
-dsh --profile headless --patch /home/beihang/projects/Brainwaves/steerloop/examples/deepseek-harness/remote.cordis.yml "continue the long task"
+dsh --profile headless --patch /home/beihang/projects/Steerloop/examples/deepseek-harness/remote.cordis.yml "continue the long task"
 ```
 
 ## Observe-only mode
@@ -71,7 +71,7 @@ Use observe-only mode when another Harness answerer should remain responsible
 for approval decisions:
 
 ```bash
-dsh --profile headless --patch /home/beihang/projects/Brainwaves/steerloop/examples/deepseek-harness/observe-only.cordis.yml "monitor this task only"
+dsh --profile headless --patch /home/beihang/projects/Steerloop/examples/deepseek-harness/observe-only.cordis.yml "monitor this task only"
 ```
 
 ## Verified smoke

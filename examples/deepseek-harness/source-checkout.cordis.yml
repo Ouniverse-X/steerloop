@@ -3,7 +3,7 @@
 
 - insert:
     - id: steerloop
-      name: /home/beihang/projects/Brainwaves/steerloop/packages/dsh-plugin/src/index.js
+      name: /home/beihang/projects/Steerloop/packages/dsh-plugin/src/index.js
       config:
         relayUrl: !!js "process.env.STEERLOOP_RELAY_URL ?? 'ws://127.0.0.1:8787/ws'"
         token: !!js "process.env.STEERLOOP_TOKEN ?? 'steerloop-local-dev'"
