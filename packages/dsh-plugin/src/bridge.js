@@ -13,25 +13,94 @@ const DEFAULTS = {
   approvalTimeoutMs: 5 * 60_000,
 };
 
+const ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
+const PAIRING_CODE_PATTERN = /^[A-Z0-9-]+$/;
+
+function optionalString(value, name) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${name} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function optionalPositiveInteger(value, name) {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+}
+
+function normalizeConfig(config) {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+    throw new Error("Steerloop DSH plugin config must be an object");
+  }
+  if (config.requireToken === true && config.token === undefined && process.env.STEERLOOP_TOKEN === undefined) {
+    throw new Error("STEERLOOP_TOKEN or config.token is required");
+  }
+  if (config.requireRelayUrl === true && config.relayUrl === undefined && process.env.STEERLOOP_RELAY_URL === undefined) {
+    throw new Error("STEERLOOP_RELAY_URL or config.relayUrl is required");
+  }
+  const host = hostname();
+  const relayUrl = optionalString(config.relayUrl, "relayUrl")
+    ?? optionalString(process.env.STEERLOOP_RELAY_URL, "STEERLOOP_RELAY_URL")
+    ?? DEFAULTS.relayUrl;
+  try {
+    const parsed = new URL(relayUrl);
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+      throw new Error("Relay URL must use ws: or wss:");
+    }
+  } catch (error) {
+    throw new Error(error instanceof Error ? `Invalid relayUrl: ${error.message}` : "Invalid relayUrl");
+  }
+  const token = optionalString(config.token, "token")
+    ?? optionalString(process.env.STEERLOOP_TOKEN, "STEERLOOP_TOKEN")
+    ?? DEFAULTS.token;
+  const hostId = optionalString(config.hostId, "hostId")
+    ?? optionalString(process.env.STEERLOOP_HOST_ID, "STEERLOOP_HOST_ID")
+    ?? `${host}-dsh`;
+  if (!ID_PATTERN.test(hostId)) throw new Error("hostId may contain only letters, numbers, '.', '_', ':', and '-'");
+  const hostName = optionalString(config.hostName, "hostName")
+    ?? optionalString(process.env.STEERLOOP_HOST_NAME, "STEERLOOP_HOST_NAME")
+    ?? `${host} DeepSeek Harness`;
+  const pairingCode = (optionalString(config.pairingCode, "pairingCode")
+    ?? optionalString(process.env.STEERLOOP_PAIRING_CODE, "STEERLOOP_PAIRING_CODE")
+    ?? randomPairingCode()).toUpperCase();
+  if (!PAIRING_CODE_PATTERN.test(pairingCode) || pairingCode.length < 6 || pairingCode.length > 32) {
+    throw new Error("pairingCode must be 6-32 characters using A-Z, 0-9, or '-'");
+  }
+  if (config.approvals !== undefined && typeof config.approvals !== "boolean") {
+    throw new Error("approvals must be a boolean when provided");
+  }
+  if (config.prependApprovalAnswerer !== undefined && typeof config.prependApprovalAnswerer !== "boolean") {
+    throw new Error("prependApprovalAnswerer must be a boolean when provided");
+  }
+  if (config.requireToken !== undefined && typeof config.requireToken !== "boolean") {
+    throw new Error("requireToken must be a boolean when provided");
+  }
+  if (config.requireRelayUrl !== undefined && typeof config.requireRelayUrl !== "boolean") {
+    throw new Error("requireRelayUrl must be a boolean when provided");
+  }
+  return {
+    ...DEFAULTS,
+    ...config,
+    relayUrl,
+    token,
+    hostId,
+    hostName,
+    pairingCode,
+    heartbeatMs: optionalPositiveInteger(config.heartbeatMs, "heartbeatMs") ?? DEFAULTS.heartbeatMs,
+    reconnectMinMs: optionalPositiveInteger(config.reconnectMinMs, "reconnectMinMs") ?? DEFAULTS.reconnectMinMs,
+    reconnectMaxMs: optionalPositiveInteger(config.reconnectMaxMs, "reconnectMaxMs") ?? DEFAULTS.reconnectMaxMs,
+    pairingTtlMs: optionalPositiveInteger(config.pairingTtlMs, "pairingTtlMs") ?? DEFAULTS.pairingTtlMs,
+    approvalTimeoutMs: optionalPositiveInteger(config.approvalTimeoutMs, "approvalTimeoutMs") ?? DEFAULTS.approvalTimeoutMs,
+  };
+}
+
 export class SteerloopDshBridge {
   constructor(config = {}) {
-    const host = hostname();
-    if (config.requireToken === true && config.token === undefined && process.env.STEERLOOP_TOKEN === undefined) {
-      throw new Error("STEERLOOP_TOKEN or config.token is required");
-    }
-    if (config.requireRelayUrl === true && config.relayUrl === undefined && process.env.STEERLOOP_RELAY_URL === undefined) {
-      throw new Error("STEERLOOP_RELAY_URL or config.relayUrl is required");
-    }
-    const token = config.token ?? process.env.STEERLOOP_TOKEN ?? DEFAULTS.token;
-    this.config = {
-      ...DEFAULTS,
-      ...config,
-      relayUrl: config.relayUrl ?? process.env.STEERLOOP_RELAY_URL ?? DEFAULTS.relayUrl,
-      token,
-      hostId: config.hostId ?? process.env.STEERLOOP_HOST_ID ?? `${host}-dsh`,
-      hostName: config.hostName ?? process.env.STEERLOOP_HOST_NAME ?? `${host} DeepSeek Harness`,
-      pairingCode: config.pairingCode ?? process.env.STEERLOOP_PAIRING_CODE ?? randomPairingCode(),
-    };
+    this.config = normalizeConfig(config);
     this.mapper = new HarnessEventMapper();
     this.pendingApprovals = new Map();
     this.queue = [];

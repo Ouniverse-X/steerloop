@@ -99,3 +99,7 @@ Reusable overlays are available under
 [`examples/deepseek-harness`](../examples/deepseek-harness/README.md).
 Use `source-checkout.cordis.yml` for this local repository checkout before the
 package is installed into a Harness profile.
+
+## Publishing
+
+For package publication readiness and blockers, see [the DSH plugin npm publishing checklist](dsh-plugin-publishing.md).

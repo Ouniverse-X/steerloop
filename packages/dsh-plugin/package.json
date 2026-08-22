@@ -1,18 +1,64 @@
 {
   "name": "@steerloop/dsh-plugin",
   "version": "0.1.0",
-  "description": "DeepSeek Harness Cordis plugin that bridges DSH sessions and approvals to Steerloop.",
+  "description": "DeepSeek Harness Cordis plugin that bridges DSH sessions and approvals to Steerloop mobile/web control plane.",
   "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./bridge": "./src/bridge.js",
-    "./mapping": "./src/mapping.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./bridge": {
+      "types": "./src/bridge.d.ts",
+      "default": "./src/bridge.js"
+    },
+    "./mapping": {
+      "types": "./src/mapping.d.ts",
+      "default": "./src/mapping.js"
+    },
+    "./protocol": {
+      "types": "./src/protocol.d.ts",
+      "default": "./src/protocol.js"
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "test": "vitest run"
   },
   "dependencies": {
     "ws": "^8.18.1"
-  }
+  },
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/Ouniverse-X/steerloop#readme",
+  "bugs": {
+    "url": "https://github.com/Ouniverse-X/steerloop/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ouniverse-X/steerloop.git",
+    "directory": "packages/dsh-plugin"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "steerloop",
+    "agent",
+    "approval",
+    "remote-control",
+    "pwa"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "types": "src/index.d.ts",
+  "files": [
+    "src/",
+    "README.md",
+    "package.json"
+  ]
 }

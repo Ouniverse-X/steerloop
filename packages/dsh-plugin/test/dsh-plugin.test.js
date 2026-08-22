@@ -89,6 +89,24 @@ describe("DeepSeek Harness mapping", () => {
     vi.useRealTimers();
   });
 
+  it("validates externally supplied config before connecting", () => {
+    expect(() => new SteerloopDshBridge({ relayUrl: "http://127.0.0.1:8787/ws" })).toThrow(
+      /ws: or wss:/,
+    );
+    expect(() => new SteerloopDshBridge({ hostId: "bad host id" })).toThrow(
+      /hostId/,
+    );
+    expect(() => new SteerloopDshBridge({ pairingCode: "bad code" })).toThrow(
+      /pairingCode/,
+    );
+    expect(() => new SteerloopDshBridge({ heartbeatMs: 0 })).toThrow(
+      /heartbeatMs/,
+    );
+    expect(() => new SteerloopDshBridge({ approvals: "yes" })).toThrow(
+      /approvals/,
+    );
+  });
+
   it("fails remote-required config before falling back to local defaults", () => {
     const previousToken = process.env.STEERLOOP_TOKEN;
     const previousRelayUrl = process.env.STEERLOOP_RELAY_URL;
