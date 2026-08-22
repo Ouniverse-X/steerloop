@@ -31,7 +31,7 @@ plane for long-running Harness jobs.
 
 ## Install into a Harness profile
 
-After publication:
+Install the current alpha from npm:
 
 ```bash
 dsh plugin --profile headless add @steerloop/dsh-plugin@alpha
@@ -42,13 +42,13 @@ release simulation:
 
 ```bash
 npm pack -w @steerloop/dsh-plugin
-dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0-alpha.0.tgz
+dsh plugin --profile headless add ./steerloop-dsh-plugin-0.1.0-alpha.1.tgz
 ```
 
 For active local development you can install this checkout directly:
 
 ```bash
-dsh plugin --profile headless add "file:/home/beihang/projects/Steerloop/packages/dsh-plugin"
+dsh plugin --profile headless add "file:/path/to/steerloop/packages/dsh-plugin"
 ```
 
 The package declares a DeepSeek Harness bundle, so `dsh plugin add` activates
@@ -66,11 +66,11 @@ plugins:
     - id: steerloop
       name: '@steerloop/dsh-plugin'
       config:
-        relayUrl: "wss://steerloop.example/ws"
-        token: "replace-with-a-high-entropy-token"
-        hostId: "gpu26-dsh"
-        hostName: "gpu26 DeepSeek Harness"
-        pairingCode: "PAIR-2026"
+        relayUrl: "wss://relay.example.com/ws"
+        token: "use-a-high-entropy-token"
+        hostId: "workstation-dsh"
+        hostName: "Workstation DeepSeek Harness"
+        pairingCode: "PAIR-1234"
         requireRelayUrl: true
         requireToken: true
 ```

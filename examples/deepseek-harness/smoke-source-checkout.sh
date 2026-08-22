@@ -2,11 +2,11 @@
 set -euo pipefail
 
 STEERLOOP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HARNESS_ROOT="${HARNESS_ROOT:-/home/beihang/projects/Harness/deepseek-harness}"
-DSH_ENV="${DSH_ENV:-/home/beihang/projects/Harness/dsh-env.sh}"
+HARNESS_ROOT="${HARNESS_ROOT:-/path/to/Harness/deepseek-harness}"
+DSH_ENV="${DSH_ENV:-/path/to/Harness/dsh-env.sh}"
 PORT="${STEERLOOP_RELAY_PORT:-18887}"
-PAIRING_CODE="${STEERLOOP_PAIRING_CODE:-DSH-2026}"
-HOST_ID="${STEERLOOP_HOST_ID:-harness-example-smoke-dsh}"
+PAIRING_CODE="${STEERLOOP_PAIRING_CODE:-PAIR-SMOKE}"
+HOST_ID="${STEERLOOP_HOST_ID:-harness-smoke-dsh}"
 
 if [[ ! -f "$DSH_ENV" ]]; then
   echo "Missing Harness environment file: $DSH_ENV" >&2
@@ -59,6 +59,7 @@ fi
   STEERLOOP_RELAY_URL="ws://127.0.0.1:${PORT}/ws" \
     STEERLOOP_HOST_ID="$HOST_ID" \
     STEERLOOP_HOST_NAME="Harness Example Smoke DSH" \
+    STEERLOOP_DSH_PLUGIN_ENTRY="$STEERLOOP_ROOT/packages/dsh-plugin/src/index.js" \
     STEERLOOP_PAIRING_CODE="$PAIRING_CODE" \
     timeout 15 node --import tsx/esm apps/cli/src/bin.ts \
       --profile headless \

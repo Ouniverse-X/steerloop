@@ -1,6 +1,6 @@
 {
   "name": "@steerloop/dsh-plugin",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "DeepSeek Harness Cordis plugin that bridges DSH sessions and approvals to Steerloop mobile/web control plane.",
   "type": "module",
   "main": "src/index.js",

@@ -57,11 +57,11 @@ token used by other Steerloop hosts:
     - id: steerloop
       name: '@steerloop/dsh-plugin'
       config:
-        relayUrl: "wss://steerloop.example/ws"
-        token: "replace-with-a-high-entropy-token"
-        hostId: "gpu26-dsh"
-        hostName: "gpu26 DeepSeek Harness"
-        pairingCode: "PAIR-2026"
+        relayUrl: "wss://relay.example.com/ws"
+        token: "use-a-high-entropy-token"
+        hostId: "workstation-dsh"
+        hostName: "Workstation DeepSeek Harness"
+        pairingCode: "PAIR-1234"
 ```
 
 Use a high-entropy token in remote deployments and avoid committing the token or
@@ -94,13 +94,12 @@ pairing code into a shared repository.
 
 ## Verified local smoke
 
-The plugin was loaded into the local DeepSeek Harness checkout at
-`/home/beihang/projects/Harness/deepseek-harness` with the Harness-provided Node
-24 environment. The smoke covered:
+The plugin was loaded into a local DeepSeek Harness checkout with the
+Harness-provided Node 24 environment. The smoke covered:
 
 - `dsh --profile headless --patch <tmp patch> --dump-config`;
 - `dsh --profile headless --patch <tmp patch> "Steerloop smoke: say hello and stop."`;
-- temporary Steerloop Relay on port `18887`, where Harness printed the pairing
+- temporary Steerloop Relay, where Harness printed the pairing
   code and Relay logged the host pairing offer.
 - tarball installation into an isolated `DSH_HOME`, confirming automatic bundle
   activation without an extra `--patch`.

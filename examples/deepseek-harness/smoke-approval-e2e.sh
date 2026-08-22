@@ -2,8 +2,8 @@
 set -euo pipefail
 
 STEERLOOP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HARNESS_ROOT="${HARNESS_ROOT:-/home/beihang/projects/Harness/deepseek-harness}"
-DSH_ENV="${DSH_ENV:-/home/beihang/projects/Harness/dsh-env.sh}"
+HARNESS_ROOT="${HARNESS_ROOT:-/path/to/Harness/deepseek-harness}"
+DSH_ENV="${DSH_ENV:-/path/to/Harness/dsh-env.sh}"
 PORT="${STEERLOOP_RELAY_PORT:-18889}"
 PROFILE="${STEERLOOP_DSH_SMOKE_PROFILE:-headless}"
 HOST_PREFIX="${STEERLOOP_HOST_PREFIX:-harness-approval-e2e}"
